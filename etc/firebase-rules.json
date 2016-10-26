@@ -1,0 +1,63 @@
+{
+  "rules": {
+    "users": {
+      "$uid": {
+		    ".read": "auth != null && (auth.uid == $uid || root.child('friends').child($uid).child(auth.uid).exists() || root.child('requestKeys').child($uid).child(root.child('users').child(auth.uid).child('emailEscaped').val()).exists() || root.child('requestKeys').child($uid).child(root.child('passcodes').child(auth.uid).val()).exists())",
+    		".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "friends": {
+      "$uid": {
+		    ".read": "auth != null && auth.uid == $uid",
+    		".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "requests": {
+      "$code": {
+        ".read": "auth != null && ($code == root.child('users').child(auth.uid).child('emailEscaped').val() || $code == root.child('passcodes').child(auth.uid).val())",
+        ".write": "auth != null && (newData.hasChildren() || $code == root.child('users').child(auth.uid).child('emailEscaped').val() || $code == root.child('passcodes').child(auth.uid).val())"
+      }
+    },
+    "requestKeys": {
+      "$uid": {
+        "$code": {
+          ".read": "auth != null && ($code == root.child('users').child(auth.uid).child('emailEscaped').val() || $code == root.child('passcodes').child(auth.uid).val())",
+          ".write": "auth != null && (auth.uid == $uid || $code == root.child('users').child(auth.uid).child('emailEscaped').val() || $code == root.child('passcodes').child(auth.uid).val())"
+        }
+      }
+    },
+    "messages": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && (!data.exists() || auth.uid == $uid || root.child('friends').child($uid).child(auth.uid).exists())"
+      }
+    },
+    "signals": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && (!data.exists() || auth.uid == $uid || root.child('friends').child($uid).child(auth.uid).exists())"
+      }
+    },
+    "notifications": {
+      ".indexOn": ["timestamp"],
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('administrators').child(root.child('users').child(auth.uid).child('emailEscaped').val()).val() == true"
+    },
+    "lastNotificationChecked": {
+      "$uid": {
+	      ".read": "auth != null && $uid == auth.uid",
+	      ".write": "auth != null && $uid == auth.uid"
+      }
+    },
+    "administrators": {
+      "$email": {
+        ".read": "auth != null && $email == root.child('users').child(auth.uid).child('emailEscaped').val()"
+      }
+    },
+    "passcodes": {
+      "$uid": {
+        ".write": "auth != null && $uid == auth.uid && !data.exists() && newData.val().matches(/^[0-9]+$/)"
+      }
+    }
+  }
+}
