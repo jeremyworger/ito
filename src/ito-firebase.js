@@ -32,15 +32,13 @@
       // Browser
       if(isBrowser) {
         let h = document.querySelector('head');
-        return Promise.all(['app', 'auth', 'database'].map(i => {
-          return new Promise((resolve, reject) => {
-            let s = document.createElement('script');
-            s.src = 'https://www.gstatic.com/firebasejs/3.3.0/firebase-' + i + '.js';
-            s.addEventListener('load', () => { resolve(); });
-            s.addEventListener('error', () => { reject(); });
-            h.appendChild(s);
-          });
-        }));
+        return new Promise((resolve, reject) => {
+          let s = document.createElement('script');
+          s.src = 'https://www.gstatic.com/firebasejs/3.5.2/firebase.js';
+          s.addEventListener('load', () => { resolve(); });
+          s.addEventListener('error', () => { reject(); });
+          h.appendChild(s);
+        });
       }
       // Node.js
       else {
