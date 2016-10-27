@@ -36,6 +36,7 @@ const config = {
   authDomain: "(see your Firebase setup)",
   databaseURL: "(see your Firebase setup)"
 };
+
 ito.init(provider, config).then(() => {
   // Write your codes to be done when initialized
 });
@@ -108,8 +109,10 @@ ito.on('reject', event => {
 // opt can be any JavaScript object as you like
 let opt = { password: 'OpenSesame!' };
 
-ito.request('(e-mail address)', opt).then(key => {
+ito.request('(e-mail address or passcode)', opt).then(key => {
   requestKey = key;
+}, () => {
+  console.log('Such a user does not exist.')
 })
 ```
 
@@ -126,6 +129,17 @@ ito.on('request', event => {
     event.reject();
 })
 ```
+
+### Set a passcode for friend discovery
+```js
+ito.setPasscode('(passcode)').catch(() => {
+  console.log('the passcode is already used by other user');
+});
+```
+
+`passcode` must be a string which consists one or more characters out of
+alphabets in lower and upper cases, numbers, `-`, `_` and `=`.
+When `null` is passed, passcode-based friend discovery becomes inactive.
 
 ## Watching friends' status
 ```js
@@ -164,7 +178,7 @@ ito.on('notification', event => {
     console.log('notification: '
       + (typeof event.data === 'object' ? event.data.body : event.data)
       + ' (at ' + new Date(notification).toLocaleString()));
-  };
+  });
 });
 ```
 

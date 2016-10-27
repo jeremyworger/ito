@@ -78,16 +78,24 @@
           firebaseProvider.onOnline(b);
         }
 
+        // Disconnect/Reconnect to Firebase
         firebase.database().ref('.info/connected').on('value', snapshot => {
           if(snapshot.val() === true) {
             if(disconnectRef && getUser()) {
               disconnectRef.set('online');
               firebaseSetOnDisconnectRef();
+              if(passcode) {
+                let p = passcode;
+                passcode = null;
+                firebaseSetPasscodeRef(p);
+              }
             }
             firebaseProvider.onOnline(!!getUser());
           }
-          else
+          else {
+            firebaseResetPasscodeRef(true);
             firebaseProvider.onDisconnect();
+          }
         });
       });
     });
@@ -235,6 +243,7 @@
       status: createOnly ? 'offline' : 'online'
     };
     let p = firebase.database().ref('users/' + user.uid).set(prof)
+      .then(firebase.database().ref('emails/' + firebaseEscape(email).set(user.uid)))
       .then(firebaseCheckAdministrator);
     if(!createOnly)
       firebaseOnOnline();
@@ -247,6 +256,7 @@
       firebase.database().ref('users/' + user.uid).once('value', snapshot => {
         email = snapshot.val().email;
         firebase.database().ref('users/' + user.uid + '/status').set('online')
+          .then(firebase.database().ref('emails/' + firebaseEscape(email)).set(user.uid))
           .then(firebaseCheckAdministrator)
           .then(firebaseOnOnline)
           .then(resolve);
@@ -337,10 +347,21 @@
         let user = getUser();
         if(pass)
           firebaseResetPasscodeRef();
-        passcode = pass;
-        firebase.database().ref('passcodes/' + user.uid).set(pass);
-        passcodesRef = firebase.database().ref('requests/' + pass);
-        passcodesRef.on('child_added', firebaseOnRequest.bind(this, true));
+        let passRef = firebase.database().ref('passcodes/' + user.uid);
+        passRef.onDisconnect().remove();
+        return passRef.set(pass)
+          .then(() => {
+            passcode = pass;
+            let regRef = firebase.database().ref('passcodeReg/' + pass);
+            regRef.onDisconnect().remove();
+            regRef.set(true).then(() => {
+              passcodesRef = firebase.database().ref('requests/' + pass);
+              passcodesRef.on('child_added', firebaseOnRequest.bind(this, true));
+              resolve();
+            });
+          }, () => {
+            reject(new Error('the specified passcode is already used'));
+          });
       }
     });
   }
@@ -354,10 +375,11 @@
     firebaseResetPasscodeRef();
   }
 
-  function firebaseResetPasscodeRef() {
-    if(passcode) {
+  function firebaseResetPasscodeRef(isOffline) {
+    if(passcode && !isOffline) {
       let user = getUser();
-      firebase.database().ref('passcodes/' + user.uid).remove();
+      firebase.database().ref('passcodeReg/' + passcode).remove()
+        .then(firebase.database().ref('passcodes/' + user.uid).remove());
       passcode = null;
     }
     if(passcodesRef) {
@@ -423,7 +445,9 @@
         return ref.set(arg);
       }).then(() => {
         resolve(ref.key);
-      })
+      }, () => {
+        reject(new Error('No user for requested email address or passcode exists.'));
+      });
     });
   };
 
