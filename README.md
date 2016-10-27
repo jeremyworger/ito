@@ -181,7 +181,8 @@ ito.on('message', event => {
 ito.on('notification', event => {
   event.data.forEach(notification => {
     console.log('notification: '
-      + (typeof event.data === 'object' ? event.data.body : event.data)
+      + (typeof notification.data === 'object' ?
+        notification.data.body : notification.data)
       + ' (at ' + new Date(notification).toLocaleString()));
   });
 });
