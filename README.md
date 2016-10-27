@@ -141,6 +141,11 @@ ito.setPasscode('(passcode)').catch(() => {
 alphabets in lower and upper cases, numbers, `-`, `_` and `=`.
 When `null` is passed, passcode-based friend discovery becomes inactive.
 
+Note: A passcode should be a string which is difficult to guess.
+While you could generate 6- or 8-digit passcode and show it to users,
+it would be recommended that a hashed value of the passcode should be set
+to `ito.setPasscode()`, for example.
+
 ## Watching friends' status
 ```js
 // When a friend is added to your friend list
