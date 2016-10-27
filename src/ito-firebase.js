@@ -278,8 +278,6 @@
         dropRequest(data.key, usePasscode).then(() => {
           return firebaseAddFriend(v.uid);
         }).then(() => {
-          /*return firebaseFinishRequest(v.passcode || firebaseEscape(v.email));
-        }).then(() => {*/
           firebaseProvider.onAccept(v.requestKey, {
             userName: v.userName,
             uid: v.uid,
@@ -289,8 +287,6 @@
         break;
       case 'reject':
         dropRequest(data.key, usePasscode).then(() => {
-          /*return firebaseFinishRequest(v.passcode || firebaseEscape(v.email));
-        }).then(() => {*/
           firebaseProvider.onReject(v.requestKey);
         });
         break;
@@ -452,12 +448,7 @@
     return ref ? ref.child(key).remove() : Promise.reject(new Error('internal error (firebaseDropRequest)'));
   }
   firebaseProvider.dropRequest = dropRequest;
-/*
-  function firebaseFinishRequest(m) {
-    let user = getUser();
-    return firebase.database().ref('requestKeys/' + user.uid + '/' + m).remove();
-  }
-*/
+
   function firebaseFinishRequest(m, uid) {
     let user = getUser();
     return firebase.database().ref('requestKeys/' + uid + '/' + m).remove();
