@@ -203,10 +203,11 @@
    */
   let disconnectRef = null;
   let requestRef = null;
-  let passcodeRef = null;
   let friendsRef = null;
   let profilesRef = {};
   let isAdmin = false;
+  let passcodesRef = null;
+  let passcode = null;
 
   function firebaseEscape(s) {
     return s ? s.replace(/[\W_]/g, c=>{return '%' + c.charCodeAt(0).toString(16);}) : null;
@@ -261,7 +262,7 @@
     });
   }
 
-  function firebaseOnRequest(data) {
+  function firebaseOnRequest(usePasscode, data) {
     if(data) {
       let v = data.val();
       let r = data.ref;
@@ -271,14 +272,14 @@
           userName: v.userName,
           uid: v.uid,
           email: v.email
-        }, v.options || null);
+        }, usePasscode, v.options || null);
         break;
       case 'accept':
-        dropRequest(data.key).then(() => {
+        dropRequest(data.key, usePasscode).then(() => {
           return firebaseAddFriend(v.uid);
         }).then(() => {
-          return firebaseFinishRequest(v.email);
-        }).then(() => {
+          /*return firebaseFinishRequest(v.passcode || firebaseEscape(v.email));
+        }).then(() => {*/
           firebaseProvider.onAccept(v.requestKey, {
             userName: v.userName,
             uid: v.uid,
@@ -287,15 +288,15 @@
         });
         break;
       case 'reject':
-        dropRequest(data.key).then(() => {
-          return firebaseFinishRequest(v.email);
-        }).then(() => {
+        dropRequest(data.key, usePasscode).then(() => {
+          /*return firebaseFinishRequest(v.passcode || firebaseEscape(v.email));
+        }).then(() => {*/
           firebaseProvider.onReject(v.requestKey);
         });
         break;
       case 'remove':
         firebaseRemoveFriend(v.uid);
-        dropRequest(data.key);
+        dropRequest(data.key, usePasscode);
         break;
       }
     }
@@ -323,14 +324,49 @@
           return p;
       }, Promise.resolve()) : Promise.resolve();
     }).then(() => {
-      requestRef.on('child_added', firebaseOnRequest);
+      requestRef.on('child_added', firebaseOnRequest.bind(this, false));
     });
   }
+
+  function firebaseSetPasscodeRef(pass) {
+    return new Promise((resolve, reject) => {
+      if(passcode === pass) {
+        resolve();
+      }
+      else if(!pass) {
+        firebaseResetPasscodeRef();
+        resolve();
+      }
+      else {
+        let user = getUser();
+        if(pass)
+          firebaseResetPasscodeRef();
+        passcode = pass;
+        firebase.database().ref('passcodes/' + user.uid).set(pass);
+        passcodesRef = firebase.database().ref('requests/' + pass);
+        passcodesRef.on('child_added', firebaseOnRequest.bind(this, true));
+      }
+    });
+  }
+  firebaseProvider.setPasscode = firebaseSetPasscodeRef;
 
   function firebaseResetRequestRef() {
     if(requestRef) {
       requestRef.off('child_added');
       requestRef = null;
+    }
+    firebaseResetPasscodeRef();
+  }
+
+  function firebaseResetPasscodeRef() {
+    if(passcode) {
+      let user = getUser();
+      firebase.database().ref('passcodes/' + user.uid).remove();
+      passcode = null;
+    }
+    if(passcodesRef) {
+      passcodesRef.off('child_added');
+      passcodesRef = null;
     }
   }
 
@@ -401,7 +437,6 @@
       let e = firebaseEscape(m);
       let ref = firebase.database().ref('requests/' + e).push();
       firebase.database().ref('friends/' + user.uid + '/' + uid).remove().then(() => {
-        email = null;
         return ref.set({
           type: 'remove',
           uid: user.uid
@@ -412,15 +447,20 @@
     });
   };
 
-  function dropRequest(key) {
-    return requestRef ? requestRef.child(key).remove() : Promise.reject(new Error('internal error (firebaseDropRequest)'));
+  function dropRequest(key, usePasscode) {
+    let ref = usePasscode ? passcodesRef : requestRef;
+    return ref ? ref.child(key).remove() : Promise.reject(new Error('internal error (firebaseDropRequest)'));
   }
   firebaseProvider.dropRequest = dropRequest;
-
+/*
   function firebaseFinishRequest(m) {
     let user = getUser();
-    let e = firebaseEscape(m);
-    return firebase.database().ref('requestKeys/' + user.uid + '/' + e).remove();
+    return firebase.database().ref('requestKeys/' + user.uid + '/' + m).remove();
+  }
+*/
+  function firebaseFinishRequest(m, uid) {
+    let user = getUser();
+    return firebase.database().ref('requestKeys/' + uid + '/' + m).remove();
   }
 
   function firebaseAddFriend(uid) {
@@ -433,32 +473,44 @@
     return firebase.database().ref('friends/' + user.uid + '/' + uid).remove();
   }
 
-  firebaseProvider.acceptRequest = (key, m, uid) => {
+  firebaseProvider.acceptRequest = (key, m, uid, usePasscode) => {
     return new Promise((resolve, reject) => {
       let user = getUser();
       let ref = firebase.database().ref('requests/' + firebaseEscape(m)).push();
       firebaseAddFriend(uid).then(() => {
-        return ref.set({
+        let arg = {
           type: 'accept',
           email: email,
           userName: user.displayName,
           uid: user.uid,
           requestKey: key
-        });
-      }).then(() => {
+        };
+        if(usePasscode) {
+          arg.passcode = passcode;
+          firebaseResetPasscodeRef();
+        }
+        return ref.set(arg);
+      }).then(
+        firebaseFinishRequest(usePasscode ? passcode : firebaseEscape(email), uid)
+      ).then(() => {
         resolve();
       });
     });
   };
 
-  firebaseProvider.rejectRequest = (key, m) => {
+  firebaseProvider.rejectRequest = (key, m, uid, usePasscode) => {
     return new Promise((resolve, reject) => {
       let ref = firebase.database().ref('requests/' + firebaseEscape(m)).push();
-      ref.set({
+      let arg = {
         type: 'reject',
         email: email,
         requestKey: key
-      }).then(() => {
+      };
+      if(usePasscode)
+        arg.passcode = passcode;
+      ref.set(arg).then(
+        firebaseFinishRequest(usePasscode ? passcode : firebaseEscape(email), uid)
+      ).then(() => {
         resolve();
       });
     });

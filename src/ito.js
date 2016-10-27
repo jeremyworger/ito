@@ -58,11 +58,12 @@
   }
   Object.setPrototypeOf(ItoStateChangeEvent.prototype, ItoEvent.prototype);
 
-  var ItoRequestEvent = function(key, profile, options) {
+  var ItoRequestEvent = function(key, profile, usePasscode, options) {
     ItoEvent.call(this, 'request');
     this.key = key;
     this.profile = profile;
     this.status = 'pending';
+    this.usePasscode = usePasscode;
     this.options = options;
   }
   Object.setPrototypeOf(ItoRequestEvent.prototype, ItoEvent.prototype);
@@ -220,8 +221,8 @@
   /*
    * Client: User Accounts and Status
    */
-  function onRequest(key, profile, options) {
-    ito.emit(new ItoRequestEvent(key, profile, options));
+  function onRequest(key, profile, usePasscode, options) {
+    ito.emit(new ItoRequestEvent(key, profile, usePasscode, options));
   }
   ItoProvider.prototype.onRequest = onRequest;
 
@@ -263,7 +264,7 @@
   }
   ItoProvider.prototype.onRemoveFriend = onRemoveFriend;
 
-  ito.request = function(m, opt) {
+  ito.request = (m, opt) => {
     if(!provider.getUser())
       return Promise.reject(new Error('not signed in'));
     for(let i in friends) {
@@ -273,6 +274,10 @@
     return provider.sendRequest(m, opt);
   };
 
+  ito.setPasscode = pass => {
+    return provider.setPasscode(pass);
+  }
+
   ito.remove = function(uid) {
     return friends[uid] ? provider.sendRemove(uid, friends[uid].email) : Promise.reject(new Error('not registered as a friend: ' + uid));
   };
@@ -281,12 +286,13 @@
     let key = this.key;
     let m = this.profile.email;
     let uid = this.profile.uid;
+    let u = this.usePasscode;
     if(this.status !== 'pending')
       return Promise.reject(new Error('already ' + this.status));
     this.status = 'accepted';
     return new Promise((resolve, reject) => {
-      provider.dropRequest(key, m).then(() => {
-        return provider.acceptRequest(key, m, uid);
+      provider.dropRequest(key, u).then(() => {
+        return provider.acceptRequest(key, m, uid, u);
       }).then(() => {
         resolve();
       });
@@ -297,12 +303,14 @@
   function rejectRequest() {
     let key = this.key;
     let m = this.profile.email;
+    let uid = this.profile.uid;
+    let u = this.usePasscode;
     if(this.status !== 'pending')
       return Promise.reject(new Error('already ' + this.status));
     this.status = 'rejected';
     return new Promise((resolve, reject) => {
-      provider.dropRequest(this.key).then(() => {
-        return provider.rejectRequest(key, m);
+      provider.dropRequest(key, u).then(() => {
+        return provider.rejectRequest(key, m, uid, u);
       });
     });
   }
