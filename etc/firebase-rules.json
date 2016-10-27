@@ -6,6 +6,12 @@
     		".write": "auth != null && auth.uid == $uid"
       }
     },
+    "emails": {
+      "$email": {
+	      ".write": "auth != null && $email == (root.child('users').child(auth.uid).child('emailEscaped').val())",
+        ".validate": "newData.val() == auth.uid"
+      }
+    },
     "friends": {
       "$uid": {
 		    ".read": "auth != null && auth.uid == $uid",
@@ -15,14 +21,16 @@
     "requests": {
       "$code": {
         ".read": "auth != null && ($code == root.child('users').child(auth.uid).child('emailEscaped').val() || $code == root.child('passcodes').child(auth.uid).val())",
-        ".write": "auth != null && (newData.hasChildren() || $code == root.child('users').child(auth.uid).child('emailEscaped').val() || $code == root.child('passcodes').child(auth.uid).val())"
+        ".write": "auth != null",
+        ".validate": "!newData.exists() || root.child('emails').child($code).exists() || root.child('passcodeReg').child($code).exists()"
       }
     },
     "requestKeys": {
       "$uid": {
         "$code": {
           ".read": "auth != null && ($code == root.child('users').child(auth.uid).child('emailEscaped').val() || $code == root.child('passcodes').child(auth.uid).val())",
-          ".write": "auth != null && (auth.uid == $uid || $code == root.child('users').child(auth.uid).child('emailEscaped').val() || $code == root.child('passcodes').child(auth.uid).val())"
+          ".write": "auth != null",
+	        ".validate": "!newData.exists() || root.child('emails').child($code).exists() || root.child('passcodeReg').child($code).exists()"
         }
       }
     },
@@ -41,7 +49,7 @@
     "notifications": {
       ".indexOn": ["timestamp"],
       ".read": "auth != null",
-      ".write": "auth != null && root.child('administrators').child(root.child('users').child(auth.uid).child('emailEscaped').val()).val() == true"
+      ".write": "auth != null && root.child('administrators').child(auth.uid).val() == true"
     },
     "lastNotificationChecked": {
       "$uid": {
@@ -50,13 +58,20 @@
       }
     },
     "administrators": {
-      "$email": {
-        ".read": "auth != null && $email == root.child('users').child(auth.uid).child('emailEscaped').val()"
+      "$uid": {
+        ".read": "auth != null && $uid == auth.uid"
       }
     },
     "passcodes": {
       "$uid": {
-        ".write": "auth != null && $uid == auth.uid && !data.exists() && newData.val().matches(/^[0-9]+$/)"
+        ".write": "auth != null && $uid == auth.uid",
+        ".validate": "newData.val().matches(/^[0-9a-zA-Z-_=]+$/) && !root.child('passcodeReg').child(newData.val()).exists()"
+      }
+    },
+    "passcodeReg": {
+      "$code": {
+        ".write": "auth != null && $code == root.child('passcodes').child(auth.uid).val()",
+        ".validate": "!data.exists() && $code.matches(/^[0-9a-zA-Z-_=]+$/)"
       }
     }
   }
