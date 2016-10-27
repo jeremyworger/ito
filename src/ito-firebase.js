@@ -191,6 +191,7 @@
         let user = getUser();
         if(user && user.isAnonymous) {
           return firebase.database().ref('lastNotificationChecked/' + user.uid).remove()
+            .then(firebase.database().ref('emails/' + firebaseEscape(email)).remove())
             .then(firebaseDeleteProfile())
             .then(() => { user.delete(); });
         }
@@ -241,7 +242,7 @@
       status: createOnly ? 'offline' : 'online'
     };
     let p = firebase.database().ref('users/' + user.uid).set(prof)
-      .then(firebase.database().ref('emails/' + firebaseEscape(email).set(user.uid)))
+      .then(firebase.database().ref('emails/' + firebaseEscape(email)).set(user.uid))
       .then(firebaseCheckAdministrator);
     if(!createOnly)
       firebaseOnOnline();
