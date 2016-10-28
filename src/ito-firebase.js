@@ -322,7 +322,7 @@
                 r.child(k).remove();
                 firebase.database().ref('requestKeys/' + v.uid + '/' + escaped).remove();
               }
-            })
+            }, () => { /* Removal of the user might be in progress... */ })
           );
         }
         else
