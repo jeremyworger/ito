@@ -10,17 +10,37 @@ only Firebase is currently supported.
 
 "ito" is a Japanese word which means "*string*", "*thread*" or "*yarn*", and is also an anagram of "*IoT*". 
 
+# Setup
+
+## Firebase
+
+1. Create your Firebase project at https://console.firebase.google.com.
+2. Configure Authentication -> Sign-in method.
+    * Select Sign-in providers as you need.
+    For Facebook, App ID, App secret and OAuth redirect URI must be
+    configured as well.
+    * Add your domain to OAuth redirect domains.
+    * Note: GitHub and Twitter are not supported yet.
+3. Copy and paste `etc/firebase-rules.json` into Database -> Rules.
+4. Confirm the snippet from Authentication -> Web setup, and note down
+the values of `apiKey`, `authDomain` and `databaseURL`. These values are
+used in `ito.init()`.
+
+
 # How to run
 
 ## Loading the library on your application
+
+Note: You can modify paths of scripts according to your environment.
+
 ### Web
 ```html
-<script src="ito.js"></script>
-<script src="ito-firebase.js"></script>
+<script src="src/ito.js"></script>
+<script src="src/ito-firebase.js"></script>
 ```
 ### Node.js
 ```js
-let ito = require('./ito-firebase.js');
+let ito = require('./src/ito-firebase.js');
 ```
 This library requires the `firebase` module:
 
