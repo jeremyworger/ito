@@ -322,7 +322,7 @@
 
   ito.send = (uid, msg) => {
     if(!friends[uid])
-      return new Promise.reject(new Error('not registered as a friend: ' + uid));
+      return Promise.reject(new Error('not registered as a friend: ' + uid));
     else
       return provider.sendMessage(uid, msg);
   };
