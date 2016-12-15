@@ -231,6 +231,18 @@
       });
   }
 
+  function firebaseCheckExistingPasscode() {
+    let user = getUser();
+    let passRef = firebase.database().ref('passcodes/' + user.uid);
+    return passRef.once('value').then(v => {
+      passcode = v ? v.val() : null;
+    });
+  }
+
+  firebaseProvider.getPasscode = () => {
+    return passcode;
+  }
+
   function firebaseSetProfile(createOnly) {
     let user = getUser();
     email = email || user.uid;
@@ -257,6 +269,7 @@
         firebase.database().ref('users/' + user.uid + '/status').set('online')
           .then(firebase.database().ref('emails/' + firebaseEscape(email)).set(user.uid))
           .then(firebaseCheckAdministrator)
+          .then(firebaseCheckExistingPasscode)
           .then(firebaseOnOnline)
           .then(resolve);
       });
@@ -347,12 +360,10 @@
         if(pass)
           firebaseResetPasscodeRef();
         let passRef = firebase.database().ref('passcodes/' + user.uid);
-        passRef.onDisconnect().remove();
         return passRef.set(pass)
           .then(() => {
             passcode = pass;
             let regRef = firebase.database().ref('passcodeReg/' + pass);
-            regRef.onDisconnect().remove();
             regRef.set(true).then(() => {
               passcodesRef = firebase.database().ref('requests/' + pass);
               passcodesRef.on('child_added', firebaseOnRequest.bind(this, true));

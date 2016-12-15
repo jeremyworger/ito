@@ -692,6 +692,7 @@
   Object.defineProperties(ito, {
     state: { get: () => { return state; }},
     profile: { get: () => { return profile; }},
+    passcode: { get: () => { return provider.getPasscode(); }},
     peerConnectionOptions: {
       get: () => { return pcOpt; },
       set: opt => { if(opt instanceof Object) pcOpt = Object.assign(pcOpt); }

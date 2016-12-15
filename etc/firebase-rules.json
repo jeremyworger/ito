@@ -64,6 +64,7 @@
     },
     "passcodes": {
       "$uid": {
+        ".read": "auth != null && $uid == auth.uid",
         ".write": "auth != null && $uid == auth.uid",
         ".validate": "newData.val().matches(/^[0-9a-zA-Z-_=]+$/) && !root.child('passcodeReg').child(newData.val()).exists()"
       }
