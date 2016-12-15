@@ -300,16 +300,27 @@
         dropRequest(data.key, usePasscode).then(() => {
           return firebaseAddFriend(v.uid);
         }).then(() => {
+          firebaseSetFriendChangedRef(v.uid);
           firebaseProvider.onAccept(v.requestKey, {
             userName: v.userName,
             uid: v.uid,
             email: v.email
           });
+          notifyFriendAdded(firebaseEscape(v.email));
         });
         break;
       case 'reject':
         dropRequest(data.key, usePasscode).then(() => {
           firebaseProvider.onReject(v.requestKey);
+        });
+        break;
+      case 'addfriend':
+        dropRequest(data.key, false).then(() => {
+          firebase.database().ref('users/' + v.uid).once('value', () => {
+            firebaseSetFriendChangedRef(v.uid);
+          }, () => {
+            throw new Error('Unexpected internal message (addfriend)');
+          });
         });
         break;
       case 'remove':
@@ -398,24 +409,24 @@
     }
   }
 
+  function firebaseSetFriendChangedRef(key) {
+    firebaseGetFriendProfile(key).then(friend => {
+      profilesRef[key] = firebase.database().ref('users/' + key);
+      profilesRef[key].on('child_changed', ((k, d) => {
+        let arg = {};
+        arg[d.key] = d.val();
+        firebaseProvider.onUpdateFriend(key, arg);
+      }).bind(this, key));
+      if(friend)
+        firebaseProvider.onAddFriend(key, friend);
+      else
+        firebase.database().ref('friends/' + user.uid + '/' + key).remove();
+    })
+  }
+
   function firebaseSetFriendsRef() {
     let user = getUser();
     friendsRef = firebase.database().ref('friends/' + user.uid);
-    friendsRef.on('child_added', data => {
-      let key = data.key;
-      firebaseGetFriendProfile(key).then(friend => {
-        profilesRef[key] = firebase.database().ref('users/' + key);
-        profilesRef[key].on('child_changed', ((k, d) => {
-          let arg = {};
-          arg[d.key] = d.val();
-          firebaseProvider.onUpdateFriend(key, arg);
-        }).bind(this, key));
-        if(friend)
-          firebaseProvider.onAddFriend(key, friend);
-        else
-          firebase.database().ref('friends/' + user.uid + '/' + key).remove();
-      })
-    });
     friendsRef.on('child_removed', data => {
       let key = data.key;
       if(profilesRef[key]) {
@@ -482,6 +493,15 @@
     return ref ? ref.child(key).remove() : Promise.reject(new Error('internal error (firebaseDropRequest)'));
   }
   firebaseProvider.dropRequest = dropRequest;
+
+  function notifyFriendAdded(m) {
+    let user = getUser();
+    let ref = firebase.database().ref('requests/' + firebaseEscape(m)).push();
+    return ref.set({
+      type: 'addfriend',
+      uid: user.uid
+    });
+  }
 
   function firebaseFinishRequest(m, uid) {
     let user = getUser();
