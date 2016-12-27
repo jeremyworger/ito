@@ -74,6 +74,24 @@
         ".write": "auth != null && $code == root.child('passcodes').child(auth.uid).val()",
         ".validate": "!data.exists() && $code.matches(/^[0-9a-zA-Z-_=]+$/)"
       }
+    },
+    "datastorescopes": {
+      "$uid": {
+        ".read": "auth != null && $uid == auth.uid",
+        ".write": "auth != null && $uid == auth.uid",
+        "$key": {
+          ".validate": "(data.exists() && data.val() == newData.val()) || (!data.exists() && newData.isString() && newData.val().matches(/^(public|friends|private)$/))"
+        }
+      }
+    },
+    "datastore": {
+      "$uid": {
+        ".write": "auth != null && $uid == auth.uid",
+				"$key": {
+          ".read": "auth != null && (root.child('datastorescopes').child($uid).child($key).val() == 'public' || (root.child('datastorescopes').child($uid).child($key).val() == 'friends' && (root.child('friends').child($uid).child(auth.uid).exists() || $uid == auth.uid)) || (root.child('datastorescopes').child($uid).child($key).val() == 'private' && $uid == auth.uid))",
+	        ".validate": "newData.hasChildren()"
+	      }
+      }
     }
   }
 }
