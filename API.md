@@ -273,7 +273,7 @@ endpoint.on('message', event => {
 });
 ```
 
-# Simple Database Sharing
+# Simple Data Store Sharing
 
 ## Open a data store
 
