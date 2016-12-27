@@ -280,7 +280,7 @@ endpoint.on('message', event => {
 ```js
 let store;
 ito.openDataStore(
-  'mydatastore',
+  '(datastorename)',
   { scope: 'public' } /* options */
 ).then(s => {
   store = s;
@@ -294,11 +294,13 @@ created. The following option(s) are currently supported:
   * `public`: The data store is publicly visible.
   * `friends`: The data store is visible only from friends.
   * `private`: The data store is visible only from the user.
+  * If not specified for a new data store, `private` is set to the scope.
+  * If the specified data store already exists, this option is ignored.
 
 ## Put a new data element in the data store
 
 ```js
-store.put('label', { /* any JavaScript object */ }).then(() => {
+store.put('key', { /* any JavaScript object */ }).then(() => {
   /* succeeded to put the data */
 }, () => {
   /* failed to put the data */
@@ -314,7 +316,7 @@ as their descendants.*
 ## Get a data element in the data store
 
 ```js
-store.get('label').then(element => {
+store.get('key').then(element => {
   console.log(element.key, element.data);
 });
 ```
@@ -329,11 +331,35 @@ store.getAll().then(elements => {
 });
 ```
 
+## Remove a data element from the data store
+
+```js
+store.remove('key').then(()) => {
+  console.log('a data element was removed from the data store.');
+});
+```
+
+## Remove all data elements from the data store
+
+```js
+store.removeAll().then(() => {
+  console.log('All data elements were removed from the data store.');
+});
+```
+
+## Remove the data store entirely
+
+```js
+store.reset().then(() => {
+  console.log('The data store was entirely reset.');
+});
+```
+
 ## Observe other user's data store
 
 ```js
 let observer;
-ito.observeDataStore('(user ID)').then(o => {
+ito.observeDataStore('(user ID)', '(datastorename)').then(o => {
   /* allowed to observe the user's data store */
   observer = o;
 
@@ -350,7 +376,7 @@ ito.observeDataStore('(user ID)').then(o => {
     console.log('removed', element.key);
   });
   /* get a data element */
-  observer.get('label').then(element => {
+  observer.get('key').then(element => {
     console.log(element.key, element.data);
   });
   /* get all data elements */

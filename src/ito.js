@@ -891,6 +891,106 @@
     });
   };
 
+  /*
+   * Simple Data Store Sharing
+   */
+  let scopes = {};
+
+  var ItoDataStore = function(scope, name) {
+    scopes[name] = scope;
+    this.name = name;
+    Object.defineProperties(this, {
+      scope: {
+        get: () => { return scopes[this.name]; }
+      }
+    });
+  };
+  // Object.setPrototypeOf(ItoDataStore.prototype, ItoEmitter.prototype);
+
+  var ItoDataElement = function(dataStore, key, data) {
+    this.dataStore = dataStore;
+    this.key = key;
+    this.data = data;
+    Object.defineProperties(this, {
+      dataStore: {
+        enumerable: false
+      }
+    });
+  };
+
+  ItoDataStore.prototype.put = function(key, data) {
+    if(!this.scope)
+      return Promise.reject(new Error('the data store is already reset.'));
+    return provider.putDataElement(this.scope, this.name, key, data);
+  };
+
+  ItoDataStore.prototype.get = function(key) {
+    if(!this.scope)
+      return Promise.reject(new Error('the data store is already reset.'));
+    return provider.getDataElement(this.scope, this.name, key).then(result => {
+      return new ItoDataElement(this, result.key, result.data);
+    });
+  };
+
+  ItoDataStore.prototype.getAll = function() {
+    if(!this.scope)
+      return Promise.reject(new Error('the data store is already reset.'));
+    return provider.getAllDataElements(this.scope, this.name).then(result => {
+      let elements = [];
+      Object.keys(result || []).forEach(key => {
+        elements.push(new ItoDataElement(this, key, result[key]));
+      });
+      return elements;
+    });
+  };
+
+  ItoDataStore.prototype.remove = function(key) {
+    if(!this.scope)
+      return Promise.reject(new Error('the data store is already reset.'));
+    return provider.removeDataElement(this.scope, this.name, key);
+  };
+
+  ItoDataStore.prototype.removeAll = function(key) {
+    if(!this.scope)
+      return Promise.reject(new Error('the data store is already reset.'));
+    return provider.removeAllDataElements(this.scope, this.name);
+  };
+
+  ItoDataStore.prototype.reset = function() {
+    if(!this.scope)
+      return Promise.reject(new Error('the data store is already reset.'));
+    return provider.removeDataStore(this.scope, this.name).then(() => {
+      delete scopes[this.name];
+    });
+  };
+
+  var ItoDataStoreObserver = function(uid, dataStore) {
+    this.uid = uid;
+    this.dataStore = dataStore;
+  };
+  Object.setPrototypeOf(ItoDataStoreObserver.prototype, ItoEmitter.prototype);
+
+  var ItoDataObserverEvent = function(type, observer) {
+    this.type = type;
+    this.target = observer;
+  }
+  Object.setPrototypeOf(ItoDataObserverEvent.prototype, ItoEvent.prototype);
+
+  ito.openDataStore = (name, opt) => {
+    let scope = 'private';
+    if(opt) {
+      if(typeof opt.scope === 'string' && opt.scope.match(/^(public|friends|private)$/))
+        scope = opt.scope;
+      else
+        throw new Error('the "scope" option must be "public", "friends" or "private".');
+    }
+    if(!(typeof name === 'string') || !name.match(/^.+$/))
+      throw new Error('the specified data store name includes illegal letter(s).');
+    return provider.openDataStore(scope, name).then(s => {
+      return new ItoDataStore(s, name);
+    });
+  };
+
   if(!isBrowser) {
     ito.ItoProvider = ItoProvider;
     module.exports = ito;

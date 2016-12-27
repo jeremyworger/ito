@@ -849,7 +849,7 @@
         dataChannel: !!opt.dataChannel
       }).then(() => {
         resolve();
-      })
+      });
     });
   };
 
@@ -863,8 +863,8 @@
         cid: cid
       }).then(() => {
         resolve();
-      })
-    })
+      });
+    });
   };
 
   firebaseProvider.sendSignaling = (uid, cid, type, data) => {
@@ -879,8 +879,73 @@
         data: JSON.stringify(data)
       }).then(() => {
         resolve();
-      })
-    })
+      });
+    });
+  };
+
+  /*
+   * Firebase Database: Simple Data Store Sharing
+   */
+  let dataObserverRef = {};
+
+  firebaseProvider.openDataStore = (scope, name) => {
+    let user = getUser();
+    let ref = firebase.database().ref(
+      'datastorescopes/' + user.uid + '/' + name);
+    return ref.once('value').then(data => {
+      let val = data.val();
+      return val || ref.set(scope).then(() => { return scope; });
+    });
+  };
+
+  firebaseProvider.removeDataStore = (scope, name) => {
+    let user = getUser();
+    let dataRef = firebase.database().ref(
+      'datastore/' + user.uid + '/' + name);
+    let scopeRef = firebase.database().ref(
+      'datastorescopes/' + user.uid + '/' + name);
+    return dataRef.remove().then(() => {
+      return scopeRef.remove();
+    });
+  };
+
+  firebaseProvider.putDataElement = (scope, name, key, data) => {
+    let user = getUser();
+    let ref = firebase.database().ref(
+      'datastore/' + user.uid + '/' + name + '/' + key);
+    return ref.set(data);
+  };
+
+  firebaseProvider.getDataElement = (scope, name, key) => {
+    let user = getUser();
+    let ref = firebase.database().ref(
+      'datastore/' + user.uid + '/' + name + '/' + key);
+    return ref.once('value').then(data => {
+      return { key: data.key, data: data.val() };
+    });
+  };
+
+  firebaseProvider.getAllDataElements = (scope, name) => {
+    let user = getUser();
+    let ref = firebase.database().ref(
+      'datastore/' + user.uid + '/' + name);
+    return ref.once('value').then(data => {
+      return data.val();
+    });
+  };
+
+  firebaseProvider.removeDataElement = (scope, name, key) => {
+    let user = getUser();
+    let ref = firebase.database().ref(
+      'datastore/' + user.uid + '/' + name + '/' + key);
+    return ref.remove();
+  };
+
+  firebaseProvider.removeAllDataElements = (scope, name) => {
+    let user = getUser();
+    let ref = firebase.database().ref(
+      'datastore/' + user.uid + '/' + name);
+    return ref.remove();
   };
 
   if(!isBrowser)
