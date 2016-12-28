@@ -436,6 +436,14 @@
   function firebaseSetFriendsRef() {
     let user = getUser();
     friendsRef = firebase.database().ref('friends/' + user.uid);
+    friendsRef.once('value', data => {
+      let val = data.val();
+      if(val) {
+        Object.keys(val).forEach(uid => {
+          firebaseSetFriendChangedRef(uid);
+        });
+      }
+    });
     friendsRef.on('child_removed', data => {
       let key = data.key;
       if(profilesRef[key]) {
@@ -956,22 +964,22 @@
     return ref.remove();
   };
 
-  function firebaseObserveElementAdded(data) {
+  function firebaseObserveElementAdd(data) {
     let uid = data.ref.parent.parent.key;
     let name = data.ref.parent.key;
     firebaseProvider.onElementAdd(uid, name, data.key, data.val());
   }
 
-  function firebaseObserveElementUpdated(data) {
+  function firebaseObserveElementUpdate(data) {
     let uid = data.ref.parent.parent.key;
     let name = data.ref.parent.key;
-    firebaseProvider.onElementUpdated(uid, name, data.key, data.val());
+    firebaseProvider.onElementUpdate(uid, name, data.key, data.val());
   }
 
-  function firebaseObserveElementRemoved(data) {
+  function firebaseObserveElementRemove(data) {
     let uid = data.ref.parent.parent.key;
     let name = data.ref.parent.key;
-    firebaseProvider.onElementUpdated(uid, name, data.key);
+    firebaseProvider.onElementRemove(uid, name, data.key);
   }
 
   firebaseProvider.observeDataStore = (uid, name) => {
@@ -980,6 +988,9 @@
       ref = dataObserverRef[uid][name];
     else {
       ref = firebase.database().ref('datastore/' + uid + '/' + name);
+      ref.on('child_added', firebaseObserveElementAdd);
+      ref.on('child_changed', firebaseObserveElementUpdate);
+      ref.on('child_removed', firebaseObserveElementRemove);
       if(!(uid in dataObserverRef))
         dataObserverRef[uid] = {};
       dataObserverRef[uid][name] = ref;

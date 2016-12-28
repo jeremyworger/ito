@@ -1011,7 +1011,7 @@
   };
 
   ito.observeDataStore = (uid, name) => {
-    provider.observeDataStore(uid, name).then(arg => {
+    return provider.observeDataStore(uid, name).then(arg => {
       if(!(arg.uid in observers))
         observers[arg.uid] = {};
       let observer = new ItoDataObserver(arg.uid, arg.name);
@@ -1026,6 +1026,7 @@
     let observer = observers[uid][name];
     observer.emit(new ItoDataObserverElementEvent(observer, 'add', key, data));
   }
+  ItoProvider.prototype.onElementAdd = onElementAdd;
 
   function onElementUpdate(uid, name, key, data) {
     if(!(uid in observers) || !(name in observers[uid]))
@@ -1033,6 +1034,7 @@
     let observer = observers[uid][name];
     observer.emit(new ItoDataObserverElementEvent(observer, 'update', key, data));
   }
+  ItoProvider.prototype.onElementUpdate = onElementUpdate;
 
   function onElementRemove(uid, name, key) {
     if(!(uid in observers) || !(name in observers[uid]))
@@ -1040,6 +1042,7 @@
     let observer = observers[uid][name];
     observer.emit(new ItoDataObserverElementEvent(observer, 'remove', key));
   }
+  ItoProvider.prototype.onElementRemove = onElementRemove;
 
   /*
    * Client Properties
