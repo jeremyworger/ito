@@ -331,30 +331,39 @@
     }
   }
 
+  function checkRevokedRequests(data) {
+    let val = data.val();
+    let r = data.ref;
+    return val ? Object.keys(val).reduce((p, k) => {
+      let v = val[k];
+      if(v.uid) {
+        return p.then(
+          firebase.database().ref('users/' + v.uid).once('value').then(d => {
+            if(!d || !d.val()) {
+              r.child(k).remove();
+              firebase.database().ref('requestKeys/' + v.uid + '/' + escaped).remove();
+            }
+          }, () => { /* Removal of the user might be in progress... */ })
+        );
+      }
+      else
+        return p;
+    }, Promise.resolve()) : Promise.resolve();
+  }
+
   function firebaseSetRequestRef() {
     let escaped = firebaseEscape(email);
     requestRef = firebase.database().ref('requests/' + escaped);
-    requestRef.once('value').then(data => {
-      let val = data.val();
-      let r = data.ref;
-      return val ? Object.keys(val).reduce((p, k) => {
-        let v = val[k];
-        if(v.uid) {
-          return p.then(
-            firebase.database().ref('users/' + v.uid).once('value').then(d => {
-              if(!d || !d.val()) {
-                r.child(k).remove();
-                firebase.database().ref('requestKeys/' + v.uid + '/' + escaped).remove();
-              }
-            }, () => { /* Removal of the user might be in progress... */ })
-          );
-        }
-        else
-          return p;
-      }, Promise.resolve()) : Promise.resolve();
-    }).then(() => {
+    requestRef.once('value').then(checkRevokedRequests).then(() => {
       requestRef.on('child_added', firebaseOnRequest.bind(this, false));
-    });
+    }).then(() => {
+      if(passcode) {
+        passcodesRef = firebase.database().ref('requests/' + passcode);
+        return passcodesRef.once('value').then(checkRevokedRequests).then(() => {
+          passcodesRef.on('child_added', firebaseOnRequest.bind(this, true));
+        });
+      }
+    })
   }
 
   function firebaseSetPasscodeRef(pass) {
