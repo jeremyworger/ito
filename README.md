@@ -28,7 +28,7 @@ Node.js with the following features:
 * friend list, as a whitelist of connectable accounts
 * messaging and Notifications
 * WebRTC peer-to-peer communication (browsers only)
-* simple database sharing (under development)
+* simple database sharing
 
 # Prerequisites
 
