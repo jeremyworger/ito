@@ -365,25 +365,25 @@ ito.observeDataStore('(user ID)', '(datastorename)').then(o => {
   observer = o;
 
   /* a data element is added */
-  observer.on('elementadd', element => {
-    console.log('added', element.key, element.data);
+  observer.on('elementadd', event => {
+    console.log('added', event.key, event.data);
   });
   /* a data element is updated */
-  observer.on('elementupdate', element => {
-    console.log('updated', element.key, element.data);
+  observer.on('elementupdate', event => {
+    console.log('updated', event.key, event.data);
   });
   /* a data element is removed */
-  observer.on('elementremove', element => {
-    console.log('removed', element.key);
+  observer.on('elementremove', event => {
+    console.log('removed', event.key);
   });
   /* get a data element */
-  observer.get('key').then(element => {
-    console.log(element.key, element.data);
+  observer.get('key').then(event => {
+    console.log(event.key, event.data);
   });
   /* get all data elements */
-  observer.getAll().then(element => {
-    Object.keys(elements).forEach(element => {
-      console.log(element.key, element.data);
+  observer.getAll().then(event => {
+    Object.keys(event).forEach(event => {
+      console.log(event.key, event.data);
     });
   });
 }, () => {

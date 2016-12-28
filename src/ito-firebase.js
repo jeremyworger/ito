@@ -952,9 +952,39 @@
 
   firebaseProvider.removeAllDataElements = (scope, name) => {
     let user = getUser();
-    let ref = firebase.database().ref(
-      'datastore/' + user.uid + '/' + name);
+    let ref = firebase.database().ref('datastore/' + user.uid + '/' + name);
     return ref.remove();
+  };
+
+  function firebaseObserveElementAdded(data) {
+    let uid = data.ref.parent.parent.key;
+    let name = data.ref.parent.key;
+    firebaseProvider.onElementAdd(uid, name, data.key, data.val());
+  }
+
+  function firebaseObserveElementUpdated(data) {
+    let uid = data.ref.parent.parent.key;
+    let name = data.ref.parent.key;
+    firebaseProvider.onElementUpdated(uid, name, data.key, data.val());
+  }
+
+  function firebaseObserveElementRemoved(data) {
+    let uid = data.ref.parent.parent.key;
+    let name = data.ref.parent.key;
+    firebaseProvider.onElementUpdated(uid, name, data.key);
+  }
+
+  firebaseProvider.observeDataStore = (uid, name) => {
+    let ref;
+    if(uid in dataObserverRef && name in dataObserverRef[uid])
+      ref = dataObserverRef[uid][name];
+    else {
+      ref = firebase.database().ref('datastore/' + uid + '/' + name);
+      if(!(uid in dataObserverRef))
+        dataObserverRef[uid] = {};
+      dataObserverRef[uid][name] = ref;
+    }
+    return Promise.resolve({ uid: uid, name: name });
   };
 
   if(!isBrowser)

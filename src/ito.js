@@ -282,6 +282,7 @@
     if(friends[uid] instanceof Object) {
       let f = friends[uid];
       delete friends[uid];
+      delete endpoints[uid];
       ito.emit(new ItoFriendEvent('remove', uid, f));
       onFriendOffline(uid);
     }
@@ -380,6 +381,7 @@
   const useTrack = !!self.RTCRtpSender;
   const useTransceiver = !!self.RTCRtpTransceiver;
   let endpoints = {};
+  let pcOpt = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]};
 
   ito.invite = function(uid, stream, opt) {
     return new Promise((resolve, reject) => {
@@ -709,21 +711,6 @@
   }
 
   /*
-   * Client Properties
-   */
-  let pcOpt = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]};
-
-  Object.defineProperties(ito, {
-    state: { get: () => { return state; }},
-    profile: { get: () => { return profile; }},
-    passcode: { get: () => { return provider.getPasscode(); }},
-    peerConnectionOptions: {
-      get: () => { return pcOpt; },
-      set: opt => { if(opt instanceof Object) pcOpt = Object.assign(pcOpt); }
-    }
-  });
-
-  /*
    * Communication Endpoint
    */
   let epOpt = {};
@@ -916,9 +903,10 @@
   };
 
   /*
-   * Simple Data Store Sharing
+   * Client: Simple Data Store Sharing
    */
   let scopes = {};
+  let observers = {};
 
   var ItoDataStore = function(scope, name) {
     scopes[name] = scope;
@@ -988,17 +976,24 @@
     });
   };
 
-  var ItoDataStoreObserver = function(uid, dataStore) {
+  var ItoDataObserver = function(uid, dataStore) {
     this.uid = uid;
     this.dataStore = dataStore;
   };
-  Object.setPrototypeOf(ItoDataStoreObserver.prototype, ItoEmitter.prototype);
+  Object.setPrototypeOf(ItoDataObserver.prototype, ItoEmitter.prototype);
 
   var ItoDataObserverEvent = function(type, observer) {
     this.type = type;
     this.target = observer;
   }
   Object.setPrototypeOf(ItoDataObserverEvent.prototype, ItoEvent.prototype);
+
+  var ItoDataObserverElementEvent = function(observer, type, key, data) {
+    ItoDataObserverEvent.call(this, 'element' + type, observer);
+    this.key = key;
+    this.data = data;
+  };
+  Object.setPrototypeOf(ItoDataObserverElementEvent.prototype, ItoDataObserverEvent.prototype);
 
   ito.openDataStore = (name, opt) => {
     let scope = 'private';
@@ -1014,6 +1009,50 @@
       return new ItoDataStore(s, name);
     });
   };
+
+  ito.observeDataStore = (uid, name) => {
+    provider.observeDataStore(uid, name).then(arg => {
+      if(!(arg.uid in observers))
+        observers[arg.uid] = {};
+      let observer = new ItoDataObserver(arg.uid, arg.name);
+      observers[arg.uid][arg.name] = observer;
+      return observer;
+    });
+  };
+
+  function onElementAdd(uid, name, key, data) {
+    if(!(uid in observers) || !(name in observers[uid]))
+      return;
+    let observer = observers[uid][name];
+    observer.emit(new ItoDataObserverElementEvent(observer, 'add', key, data));
+  }
+
+  function onElementUpdate(uid, name, key, data) {
+    if(!(uid in observers) || !(name in observers[uid]))
+      return;
+    let observer = observers[uid][name];
+    observer.emit(new ItoDataObserverElementEvent(observer, 'update', key, data));
+  }
+
+  function onElementRemove(uid, name, key) {
+    if(!(uid in observers) || !(name in observers[uid]))
+      return;
+    let observer = observers[uid][name];
+    observer.emit(new ItoDataObserverElementEvent(observer, 'remove', key));
+  }
+
+  /*
+   * Client Properties
+   */
+  Object.defineProperties(ito, {
+    state: { get: () => { return state; }},
+    profile: { get: () => { return profile; }},
+    passcode: { get: () => { return provider.getPasscode(); }},
+    peerConnectionOptions: {
+      get: () => { return pcOpt; },
+      set: opt => { if(opt instanceof Object) pcOpt = Object.assign(pcOpt); }
+    }
+  });
 
   if(!isBrowser) {
     ito.ItoProvider = ItoProvider;
