@@ -10,8 +10,9 @@ const config = {
   databaseURL: "(see your Firebase setup)"
 };
 
-ito.init(provider, config).then(() => {
+ito.init(provider, config).then(user => {
   // Write your codes to be done when initialized
+  console.log(user.uid);
 });
 ```
 
