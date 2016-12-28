@@ -3,7 +3,7 @@
  * 
  * Copyright (c) 2017 KDDI Research, Inc.
  * Use of this source code is governed by Apache License, Version 2.0,
- * that can be found in LICENSE.md file.
+ * that can be found in LICENSE file.
  */
 
 'use strict';
