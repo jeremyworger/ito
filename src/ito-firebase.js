@@ -34,7 +34,7 @@
         let h = document.querySelector('head');
         return new Promise((resolve, reject) => {
           let s = document.createElement('script');
-          s.src = 'https://www.gstatic.com/firebasejs/3.5.2/firebase.js';
+          s.src = 'https://www.gstatic.com/firebasejs/3.6.4/firebase.js';
           s.addEventListener('load', () => { resolve(); });
           s.addEventListener('error', () => { reject(); });
           h.appendChild(s);
