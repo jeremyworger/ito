@@ -1,3 +1,4 @@
+
 # About **ito**
 
 **ito** is a JavaScript library for browser-to-browser communication,
@@ -10,6 +11,13 @@ services, only Firebase is currently supported.
 
 "ito" is a Japanese word "糸" which means "*string*", "*thread*" or "*yarn*",
 and is also an anagram of "*IoT*". 
+
+## Copyright
+
+Copyright (c) 2017 [KDDI Research, Inc.](http://www.kddi-research.jp)
+
+Use of source code of this software is governed by Apache License, Version 2.0,
+that can be found in [LICENSE](LICENSE) file.
 
 # Functional Features
 
