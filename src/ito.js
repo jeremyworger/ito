@@ -125,10 +125,34 @@
   let state = 'uninitialized';
   let profile = {};
   Object.defineProperties(profile, {
-    userName: { get: () => { return provider.getUser().userName; }},
-    email: { get: () => { return provider.getUser().email; }},
-    isAnonymous: { get: () => { return provider.getUser().isAnonymous; }},
-    uid: { get: () => { return provider.getUser().uid; }}
+    userName: {
+      get: () => {
+        let user = provider.getUser();
+        return user ? user.userName : null;
+      },
+      enumerable: true
+    },
+    email: {
+      get: () => {
+        let user = provider.getUser();
+        return user ? user.email: null;
+      },
+      enumerable: true
+    },
+    isAnonymous: {
+      get: () => {
+        let user = provider.getUser();
+        return user ? user.isAnonymous : null;
+      },
+      enumerable: true
+    },
+    uid: {
+      get: () => {
+        let user = provider.getUser();
+        return user ? user.uid : null;
+      },
+      enumerable: true
+    }
   });
   let friends = {};
 
@@ -205,7 +229,7 @@
   };
 
   ito.signOut = function() {
-    return new Promise((resolve, reject) => {
+    return !profile.uid ? Promise.resolve() : new Promise((resolve, reject) => {
       Object.keys(profile.isAnonymous ? friends : {}).reduce((a, b) => {
         return a.then(provider.sendRemove.bind(this, b, friends[b].email))
       }, Promise.resolve()).then(() => {
