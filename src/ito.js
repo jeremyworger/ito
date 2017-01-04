@@ -17,8 +17,8 @@
 'use strict';
 
 ((self, isBrowser) => {
-  if(isBrowser) {
-    self.RTCPeerConnection = 
+  if (isBrowser) {
+    self.RTCPeerConnection =
       self.RTCPeerConnection ||
       self.webkitRTCPeerConnection ||
       self.mozRTCPeerConnection;
@@ -28,118 +28,12 @@
   }
 
   /*
-   * Global Objects
+   * Global variables
    */
-  self.ItoProvider = function() {};
-
-  var ItoEmitter = function() {};
-  ItoEmitter.prototype.on = function(type, func) {
-    if(!this._)
-      this._ = {};
-    if(!this._[type])
-      this._[type] = [];
-    if(this._[type].indexOf(func) < 0)
-      this._[type].push(func);
-  };
-  ItoEmitter.prototype.emit = function(event) {
-    if(!(event instanceof ItoEvent))
-      return;
-    if(!this._)
-      this._ = {};
-    else if(this._[event.type]) {
-      this._[event.type].forEach(func => { func.call(null, event); });
-    }
-  };
-  ItoEmitter.prototype.removeListener = function(type, func) {
-    if(!this._)
-      this._ = {};
-    else if(this._[type])
-      this._[type].splice(this._[type].indexOf(func), 1);
-  };
-  ItoEmitter.prototype.removeAllListeners = function(type) {
-    if(!this._)
-      this._ = {};
-    else
-      delete this._[type];
-  }
-
-  var ItoEvent = function(type) {
-    this.type = type;
-    this.target = self.ito;
-  }
-
-  var ItoStateChangeEvent = function(state) {
-    ItoEvent.call(this, 'statechange');
-    this.state = state;
-  }
-  Object.setPrototypeOf(ItoStateChangeEvent.prototype, ItoEvent.prototype);
-
-  var ItoRequestEvent = function(key, profile, usePasscode, options) {
-    ItoEvent.call(this, 'request');
-    this.key = key;
-    this.profile = profile;
-    this.status = 'pending';
-    this.usePasscode = usePasscode;
-    this.options = options;
-  }
-  Object.setPrototypeOf(ItoRequestEvent.prototype, ItoEvent.prototype);
-
-  var ItoAcceptEvent = function(key, profile) {
-    ItoEvent.call(this, 'accept');
-    this.key = key;
-    this.profile = profile;
-  }
-  Object.setPrototypeOf(ItoAcceptEvent.prototype, ItoEvent.prototype);
-
-  var ItoRejectEvent = function(key) {
-    ItoEvent.call(this, 'reject');
-    this.key = key;
-  }
-  Object.setPrototypeOf(ItoRejectEvent.prototype, ItoEvent.prototype);
-
-  var ItoFriendEvent = function(type, uid, profile) {
-    ItoEvent.call(this, type + 'friend');
-    this.uid = uid;
-    this.profile = profile;
-  };
-  Object.setPrototypeOf(ItoFriendEvent.prototype, ItoEvent.prototype);
-
-  var ItoMessageEvent = function(uid, msg) {
-    ItoEvent.call(this, 'message');
-    this.uid = uid;
-    this.data = msg;
-  }
-  Object.setPrototypeOf(ItoMessageEvent.prototype, ItoEvent.prototype);
-
-  var ItoMessageAckEvent = function(uid, key) {
-    ItoEvent.call(this, 'messageack');
-    this.uid = uid;
-    this.messageKey = key;
-  }
-  Object.setPrototypeOf(ItoMessageAckEvent.prototype, ItoEvent.prototype);
-
-  var ItoInviteEvent = function(endpoint) {
-    ItoEvent.call(this, 'invite');
-    this.endpoint = endpoint;
-  }
-  Object.setPrototypeOf(ItoInviteEvent.prototype, ItoEvent.prototype);
-
-  var ItoNotificationEvent = function(data) {
-    ItoEvent.call(this, 'notification');
-    this.data = data; // an array of notifications (timestamp, data)
-  }
-  Object.setPrototypeOf(ItoNotificationEvent.prototype, ItoEvent.prototype);
-
-  /*
-   * Main Object
-   */
-  var Ito = function(){};
-  Object.setPrototypeOf(Ito.prototype, ItoEmitter.prototype);
-  self.ito = new Ito();
-
   let provider = null;
   let state = 'uninitialized';
   let profile = {};
+  let friends = {};
   Object.defineProperties(profile, {
     userName: {
       get: () => {
@@ -151,7 +45,7 @@
     email: {
       get: () => {
         let user = provider.getUser();
-        return user ? user.email: null;
+        return user ? user.email : null;
       },
       enumerable: true
     },
@@ -170,382 +64,580 @@
       enumerable: true
     }
   });
-  let friends = {};
+
+  const useTrack = !!self.RTCRtpSender;
+  const useTransceiver = !!self.RTCRtpTransceiver;
+  let endpoints = {};
+  let pcOpt = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+  let epOpt = {};
+
+  let scopes = {};
+  let observers = {};
 
   /*
-   * Client: Login
+   * ItoProvider base class
    */
-  function onStateChange(s) {
-    if(state !== s) {
-      state = s;
-      ito.emit(new ItoStateChangeEvent(s));
+  self.ItoProvider = class ItoProvider {
+    constructor(parent) {
+      this.signIn = {};
+      this.parent = parent;
     }
-  }
-  ItoProvider.prototype.onStateChange = onStateChange;
 
-  function onOnline(b) {
-    setTimeout(reconnectAll, 500);
-    onStateChange(b ? 'online' : 'offline');
-  }
-  ItoProvider.prototype.onOnline = onOnline;
+    /*
+     * Client: Login
+     */
+    onStateChange(s) {
+      if (state !== s) {
+        state = s;
+        this.parent.emit(new ItoStateChangeEvent(s));
+      }
+    }
 
-  function onDisconnect() {
-    if(state !== 'uninitialized')
-      onStateChange('disconnected');
-  }
-  ItoProvider.prototype.onDisconnect = onDisconnect;
+    onOnline(b) {
+      setTimeout(reconnectAll, 500);
+      this.onStateChange(b ? 'online' : 'offline');
+    }
 
-  ito.init = function(p, arg) {
-    return new Promise((resolve, reject) => {
-      if(state !== 'uninitialized')
-        resolve();
-      else if(!(p instanceof ItoProvider))
-        reject(new Error('Incorrect Provider'));
+    onDisconnect() {
+      if (state !== 'uninitialized')
+        this.onStateChange('disconnected');
+    }
+
+    /*
+     * Client: User Accounts and Status
+     */
+    onRequest(key, profile, usePasscode, options) {
+      this.parent.emit(new ItoRequestEvent(key, profile, usePasscode, options));
+    }
+
+    onAccept(key, profile) {
+      this.parent.emit(new ItoAcceptEvent(key, profile));
+    }
+
+    onReject(key) {
+      this.parent.emit(new ItoRejectEvent(key));
+    }
+
+    onAddFriend(uid, friend) {
+      friends[uid] = friend;
+      this.parent.emit(new ItoFriendEvent('add', uid, Object.assign(friend)));
+    }
+
+    onUpdateFriend(uid, friend) {
+      if (friends[uid] instanceof Object) {
+        Object.keys(friend).forEach(i => {
+          friends[uid][i] = friend[i];
+        });
+        this.parent.emit(new ItoFriendEvent('update', uid, Object.assign(friends[uid])));
+        if (friends[uid].status === 'offline')
+          setTimeout(onFriendOffline.bind(this, uid), 500);
+      }
+    }
+
+    onRemoveFriend(uid) {
+      if (friends[uid] instanceof Object) {
+        let f = friends[uid];
+        delete friends[uid];
+        delete endpoints[uid];
+        this.parent.emit(new ItoFriendEvent('remove', uid, f));
+        onFriendOffline(uid);
+      }
+    }
+
+    /*
+     * Client: Messages
+     */
+    onMessage(uid, msg) {
+      this.parent.emit(new ItoMessageEvent(uid, msg));
+    }
+
+    onMessageAck(uid, key) {
+      this.parent.emit(new ItoMessageAckEvent(uid, key));
+    }
+
+    /*
+     * Client: notifications
+     */
+    onNotification(data) {
+      this.parent.emit(new ItoNotificationEvent(data));
+    }
+
+    /*
+     * Client: WebRTC Signaling
+     */
+    onInvite(options) {
+      let uid = options.uid;
+      let cid = options.cid;
+      if (!MediaStream || !RTCPeerConnection)
+        provider.sendReject(uid, cid, 'incompatible');
+      else if (endpoints[uid] && endpoints[uid][cid])
+        provider.sendReject(uid, cid, 'unexpected_id');
       else {
-        provider = p;
-        p.load().then(p.init.bind(this, arg)).then((b) => {
-          onOnline(b);
-          resolve(p.getUser());
-        }, error => {
-          reject(error);
+        if (!endpoints[uid])
+          endpoints[uid] = {};
+        let e = new ItoEndpoint(uid, cid, false, options.dataChannel);
+        e.setReceiveTrack(options);
+        endpoints[uid][cid] = e;
+        this.parent.emit(new ItoInviteEvent(e));
+      }
+    }
+
+    onReconnect(options) {
+      let uid = options.uid;
+      let cid = options.cid;
+      if (endpoints[uid] && endpoints[uid][cid]) {
+        let e = endpoints[uid][cid];
+        let stream = e.inputStream;
+        let opt = {
+          audio: !!stream && stream.getAudioTracks().length > 0,
+          video: !!stream && stream.getVideoTracks().length > 0
+        };
+        e.setReceiveTrack(options);
+        e.isOfferer = false;
+        provider.sendAccept(uid, cid, opt).then(() => {
+          onEndpointStateChange(uid, cid, 'connecting');
+          createPeerConnection(e);
         });
       }
-    });
-  };
+    }
 
-  ito.signIn = function(p, id, pass) {
-    return new Promise((resolve, reject) => {
-      let user = provider.getUser();
-      switch(state) {
-      case 'uninitialized':
-        reject(new Error('not initialized'));
-        break;
-      case 'online':
-        resolve(provider.getUser());
-        break;
-      case 'disconnected':
-        if(user)
-          resolve(user);
-        else
-          reject(new Error('network offline'));
-        break;
-      case 'offline':
-        if(provider.signIn[p])
-          provider.signIn[p](id, pass).then(u => {
-            state = 'online';
-            resolve(u);
-          }, error => {
-            reject(new Error(error));
-          });
-        else
-          reject('auth provider is not indicated or wrong');
-        break;
+    onAcceptInvite(options) {
+      let uid = options.uid;
+      let cid = options.cid;
+      if (endpoints[uid] && endpoints[uid][cid]) {
+        let e = endpoints[uid][cid];
+        e.setReceiveTrack(options);
+        createPeerConnection(e);
       }
-    })
+    }
+
+    onClose(options) {
+      let uid = options.uid;
+      let cid = options.cid;
+      if (endpoints[uid] && endpoints[uid][cid]) {
+        let e = endpoints[uid][cid];
+        let opt = epOpt[uid][cid];
+        let pc = e.peerConnection;
+        if (pc)
+          pc.close();
+        onEndpointStateChange(uid, cid, 'closed');
+        delete endpoints[uid][cid];
+        delete epOpt[uid][cid];
+        if (opt.reject) {
+          const reason = options.reason ? options.rejected : 'terminated';
+          opt.reject(new Error(reason));
+          if (e.isOfferer) {
+            e.emit(new ItoEndpointRejectEvent(e, reason));
+            return;
+          }
+        }
+        e.emit(new ItoEndpointEvent('close', e));
+      }
+    }
+
+    onSignaling(options) {
+      let uid = options.uid;
+      let cid = options.cid;
+      if (endpoints[uid] && endpoints[uid][cid]) {
+        let e = endpoints[uid][cid];
+        switch (options.signalingType) {
+          case 'sdp':
+            setRemoteSdp(e, options.data);
+            break;
+          case 'iceCandidate':
+            addIceCandidate(e, options.data);
+            break;
+        }
+      }
+    }
+
+    /*
+     * Client: Simple Data Store Sharing
+     */
+    onElementAdd(uid, name, key, data) {
+      if (!(uid in observers) || !(name in observers[uid]))
+        return;
+      let observer = observers[uid][name];
+      observer.emit(new ItoDataObserverElementEvent(observer, 'add', key, data));
+    }
+
+    onElementUpdate(uid, name, key, data) {
+      if (!(uid in observers) || !(name in observers[uid]))
+        return;
+      let observer = observers[uid][name];
+      observer.emit(new ItoDataObserverElementEvent(observer, 'update', key, data));
+    }
+
+    onElementRemove(uid, name, key) {
+      if (!(uid in observers) || !(name in observers[uid]))
+        return;
+      let observer = observers[uid][name];
+      observer.emit(new ItoDataObserverElementEvent(observer, 'remove', key));
+    }
   };
 
-  ito.signOut = function() {
-    return !profile.uid ? Promise.resolve() : new Promise((resolve, reject) => {
-      Object.keys(profile.isAnonymous ? friends : {}).reduce((a, b) => {
-        return a.then(provider.sendRemove.bind(this, b, friends[b].email))
-      }, Promise.resolve()).then(() => {
-        provider.signOut().then(() => {
+  /*
+   * ItoEmitter base class
+   */
+  class ItoEmitter {
+    constructor() {
+      this._ = {};
+    }
+
+    on(type, func) {
+      if (!this._[type])
+        this._[type] = [];
+      if (this._[type].indexOf(func) < 0)
+        this._[type].push(func);
+    }
+
+    emit(event) {
+      if (!(event instanceof ItoEvent))
+        return;
+      if (this._[event.type]) {
+        this._[event.type].forEach(func => { func.call(null, event); });
+      }
+    }
+
+    removeListener(type, func) {
+      if (this._[type])
+        this._[type].splice(this._[type].indexOf(func), 1);
+    }
+
+    removeAllListeners(type) {
+      delete this._[type];
+    }
+  }
+
+  /*
+   * ItoEvent and descendant classes
+   */
+  class ItoEvent {
+    constructor(type) {
+      this.type = type;
+      this.target = self.ito;
+    }
+  }
+
+  class ItoStateChangeEvent extends ItoEvent {
+    constructor(state) {
+      super('statechange');
+      this.state = state;
+    }
+  }
+
+  class ItoRequestEvent extends ItoEvent {
+    constructor(key, profile, usePasscode, options) {
+      super('request');
+      this.key = key;
+      this.profile = profile;
+      this.status = 'pending';
+      this.usePasscode = usePasscode;
+      this.options = options;
+    }
+
+    accept() {
+      let key = this.key;
+      let m = this.profile.email;
+      let uid = this.profile.uid;
+      let u = this.usePasscode;
+      if (this.status !== 'pending')
+        return Promise.reject(new Error('already ' + this.status));
+      this.status = 'accepted';
+      return new Promise((resolve, reject) => {
+        provider.dropRequest(key, u).then(() => {
+          return provider.acceptRequest(key, m, uid, u);
+        }).then(() => {
           resolve();
-        }, error => {
-          reject(error);
-        })
+        });
       });
-    });
-  };
+    }
 
-  /*
-   * Client: User Accounts and Status
-   */
-  function onRequest(key, profile, usePasscode, options) {
-    ito.emit(new ItoRequestEvent(key, profile, usePasscode, options));
-  }
-  ItoProvider.prototype.onRequest = onRequest;
-
-  function onAccept(key, profile) {
-    ito.emit(new ItoAcceptEvent(key, profile));
-  }
-  ItoProvider.prototype.onAccept = onAccept;
-
-  function onReject(key) {
-    ito.emit(new ItoRejectEvent(key));
-  }
-  ItoProvider.prototype.onReject = onReject;
-
-  function onAddFriend(uid, friend) {
-    friends[uid] = friend;
-    ito.emit(new ItoFriendEvent('add', uid, Object.assign(friend)));
-  }
-  ItoProvider.prototype.onAddFriend = onAddFriend;
-
-  function onUpdateFriend(uid, friend) {
-    if(friends[uid] instanceof Object) {
-      Object.keys(friend).forEach(i => {
-        friends[uid][i] = friend[i];
+    reject() {
+      let key = this.key;
+      let m = this.profile.email;
+      let uid = this.profile.uid;
+      let u = this.usePasscode;
+      if (this.status !== 'pending')
+        return Promise.reject(new Error('already ' + this.status));
+      this.status = 'rejected';
+      return new Promise((resolve, reject) => {
+        provider.dropRequest(key, u).then(() => {
+          return provider.rejectRequest(key, m, uid, u);
+        });
       });
-      ito.emit(new ItoFriendEvent('update', uid, Object.assign(friends[uid])));
-      if(friends[uid].status === 'offline')
-        setTimeout(onFriendOffline.bind(this, uid), 500);
     }
   }
-  ItoProvider.prototype.onUpdateFriend = onUpdateFriend;
 
-  function onRemoveFriend(uid) {
-    if(friends[uid] instanceof Object) {
-      let f = friends[uid];
-      delete friends[uid];
-      delete endpoints[uid];
-      ito.emit(new ItoFriendEvent('remove', uid, f));
-      onFriendOffline(uid);
+  class ItoAcceptEvent extends ItoEvent {
+    constructor(key, profile) {
+      super('accept');
+      this.key = key;
+      this.profile = profile;
     }
   }
-  ItoProvider.prototype.onRemoveFriend = onRemoveFriend;
 
-  ito.request = (m, opt) => {
-    if(!provider.getUser())
-      return Promise.reject(new Error('not signed in'));
-    for(let i in friends) {
-      if(friends[i].email === m)
-        return Promise.reject(new Error('already registered as a friend: ' + m + ' (uid: ' + i + ')'));
+  class ItoRejectEvent extends ItoEvent {
+    constructor(key) {
+      super('reject');
+      this.key = key;
     }
-    return provider.sendRequest(m, opt);
-  };
-
-  ito.setPasscode = pass => {
-    return provider.setPasscode(pass);
   }
 
-  ito.remove = function(uid) {
-    return friends[uid] ? provider.sendRemove(uid, friends[uid].email) : Promise.reject(new Error('not registered as a friend: ' + uid));
-  };
-
-  function acceptRequest() {
-    let key = this.key;
-    let m = this.profile.email;
-    let uid = this.profile.uid;
-    let u = this.usePasscode;
-    if(this.status !== 'pending')
-      return Promise.reject(new Error('already ' + this.status));
-    this.status = 'accepted';
-    return new Promise((resolve, reject) => {
-      provider.dropRequest(key, u).then(() => {
-        return provider.acceptRequest(key, m, uid, u);
-      }).then(() => {
-        resolve();
-      });
-    });
+  class ItoFriendEvent extends ItoEvent {
+    constructor(type, uid, profile) {
+      super(type + 'friend');
+      this.uid = uid;
+      this.profile = profile;
+    }
   }
-  ItoRequestEvent.prototype.accept = acceptRequest;
 
-  function rejectRequest() {
-    let key = this.key;
-    let m = this.profile.email;
-    let uid = this.profile.uid;
-    let u = this.usePasscode;
-    if(this.status !== 'pending')
-      return Promise.reject(new Error('already ' + this.status));
-    this.status = 'rejected';
-    return new Promise((resolve, reject) => {
-      provider.dropRequest(key, u).then(() => {
-        return provider.rejectRequest(key, m, uid, u);
-      });
-    });
+  class ItoMessageEvent extends ItoEvent {
+    constructor(uid, msg) {
+      super('message');
+      this.uid = uid;
+      this.data = msg;
+    }
   }
-  ItoRequestEvent.prototype.reject = rejectRequest;
+
+  class ItoMessageAckEvent extends ItoEvent {
+    constructor(uid, key) {
+      super('messageack');
+      this.uid = uid;
+      this.messageKey = key;
+    }
+  }
+
+  class ItoInviteEvent extends ItoEvent {
+    constructor(endpoint) {
+      super('invite');
+      this.endpoint = endpoint;
+    }
+  }
+
+  class ItoNotificationEvent extends ItoEvent {
+    constructor(data) {
+      super('notification');
+      this.data = data; // an array of notifications (timestamp, data)
+    }
+  }
 
   /*
-   * Client: Messages
+   * Main Object
    */
+  class Ito extends ItoEmitter {
+    constructor() {
+      super();
+    }
 
-  ito.send = (uid, msg) => {
-    if(!friends[uid])
-      return Promise.reject(new Error('not registered as a friend: ' + uid));
-    else
-      return provider.sendMessage(uid, msg);
-  };
+    /*
+     * Client: Login
+     */
+    init(p, arg) {
+      return new Promise((resolve, reject) => {
+        if (state !== 'uninitialized')
+          resolve();
+        else if (!(p instanceof ItoProvider))
+          reject(new Error('Incorrect Provider'));
+        else {
+          provider = p;
+          p.load().then(() => {
+            return p.init(arg);
+          }).then(b => {
+            provider.onOnline(b);
+            resolve(p.getUser());
+          }, error => {
+            reject(error);
+          });
+        }
+      });
+    }
 
-  function onMessage(uid, msg) {
-    ito.emit(new ItoMessageEvent(uid, msg));
+    signIn(p, id, pass) {
+      return new Promise((resolve, reject) => {
+        let user = provider.getUser();
+        switch (state) {
+          case 'uninitialized':
+            reject(new Error('not initialized'));
+            break;
+          case 'online':
+            resolve(provider.getUser());
+            break;
+          case 'disconnected':
+            if (user)
+              resolve(user);
+            else
+              reject(new Error('network offline'));
+            break;
+          case 'offline':
+            if (provider.signIn[p])
+              provider.signIn[p](id, pass).then(u => {
+                state = 'online';
+                resolve(u);
+              }, error => {
+                reject(new Error(error));
+              });
+            else
+              reject('auth provider is not indicated or wrong');
+            break;
+        }
+      })
+    }
+
+    signOut() {
+      return !profile.uid ? Promise.resolve() : new Promise((resolve, reject) => {
+        Object.keys(profile.isAnonymous ? friends : {}).reduce((a, b) => {
+          return a.then(provider.sendRemove.bind(this, b, friends[b].email))
+        }, Promise.resolve()).then(() => {
+          provider.signOut().then(() => {
+            resolve();
+          }, error => {
+            reject(error);
+          })
+        });
+      });
+    }
+
+    /*
+     * Client: User Accounts and Status
+     */
+    request(m, opt) {
+      if (!provider.getUser())
+        return Promise.reject(new Error('not signed in'));
+      for (let i in friends) {
+        if (friends[i].email === m)
+          return Promise.reject(new Error('already registered as a friend: ' + m + ' (uid: ' + i + ')'));
+      }
+      return provider.sendRequest(m, opt);
+    }
+
+    setPasscode(pass) {
+      return provider.setPasscode(pass);
+    }
+
+    remove(uid) {
+      return friends[uid] ? provider.sendRemove(uid, friends[uid].email) : Promise.reject(new Error('not registered as a friend: ' + uid));
+    }
+
+    /*
+     * Client: Messages
+     */
+    send(uid, msg) {
+      if (!friends[uid])
+        return Promise.reject(new Error('not registered as a friend: ' + uid));
+      else
+        return provider.sendMessage(uid, msg);
+    }
+
+    /*
+     * Client: notifications
+     */
+
+    sendNotification(msg) {
+      return provider.sendNotification(msg);
+    }
+
+    /*
+     * Client: WebRTC Signaling
+     */
+    invite(uid, stream, opt) {
+      if(!(stream instanceof MediaStream) && stream !== null)
+        return Promise.reject(new Error('the second argument is neigher an instance of MediaStream nor null.'));
+      if(!(opt instanceof Object))
+        return Promise.reject(new Error('the third argument is not an appropriate option.'));
+      return new Promise((resolve, reject) => {
+        if (!MediaStream)
+          reject(new Error('WebRTC is not available on this browser'))
+        else if (!friends[uid])
+          reject(new Error('not registered as a friend: ' + uid));
+        // else if(friends[uid].status !== 'online')
+        //   reject(new Error('not online: ' + uid));
+        else if (MediaStream && stream && !(stream instanceof MediaStream))
+          reject(new Error('the second parameter (\'stream\') is invalid)'));
+        else {
+          let options = {
+            audio: !!stream && stream.getAudioTracks().length > 0,
+            video: !!stream && stream.getVideoTracks().length > 0,
+            dataChannel: opt && !!opt.dataChannel
+          };
+          provider.sendInvite(uid, options).then(cid => {
+            if (!endpoints[uid])
+              endpoints[uid] = {};
+            let e = new ItoEndpoint(uid, cid, true, options.dataChannel);
+            e.inputStream = stream;
+            endpoints[uid][cid] = e;
+            resolve(e);
+          });
+        }
+      });
+    };
+
+    /*
+     * Client: Simple Data Store Sharing
+     */
+    openDataStore(name, opt) {
+      let scope = 'private';
+      if (opt) {
+        if (typeof opt.scope === 'string' && opt.scope.match(/^(public|friends|private)$/))
+          scope = opt.scope;
+        else
+          throw new Error('the "scope" option must be "public", "friends" or "private".');
+      }
+      if (!(typeof name === 'string') || !name.match(/^.+$/))
+        throw new Error('the specified data store name includes illegal letter(s).');
+      return provider.openDataStore(scope, name).then(s => {
+        return new ItoDataStore(s, name);
+      });
+    }
+
+    observeDataStore(uid, name) {
+      return provider.observeDataStore(uid, name).then(arg => {
+        if (!(arg.uid in observers))
+          observers[arg.uid] = {};
+        let observer = new ItoDataObserver(arg.uid, arg.name);
+        observers[arg.uid][arg.name] = observer;
+        return observer;
+      });
+    }
   }
-  ItoProvider.prototype.onMessage = onMessage;
-
-  function onMessageAck(uid, key) {
-    ito.emit(new ItoMessageAckEvent(uid, key));
-  }
-  ItoProvider.prototype.onMessageAck = onMessageAck;
+  self.ito = new Ito();
 
   /*
-   * Client: notifications
+   * Internal functions
    */
-
-  ito.sendNotification = msg => {
-    return provider.sendNotification(msg);
-  };
-
-  function onNotification(data) {
-    ito.emit(new ItoNotificationEvent(data));
-  }
-  ItoProvider.prototype.onNotification = onNotification;
 
   /*
    * Client: WebRTC Signaling
    */
-  const useTrack = !!self.RTCRtpSender;
-  const useTransceiver = !!self.RTCRtpTransceiver;
-  let endpoints = {};
-  let pcOpt = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]};
-
-  ito.invite = function(uid, stream, opt) {
-    return new Promise((resolve, reject) => {
-      if(!MediaStream)
-        reject(new Error('WebRTC is not available on this browser'))
-      else if(!friends[uid])
-        reject(new Error('not registered as a friend: ' + uid));
-      // else if(friends[uid].status !== 'online')
-      //   reject(new Error('not online: ' + uid));
-      else if(MediaStream && stream && !(stream instanceof MediaStream))
-        reject(new Error('the second parameter (\'stream\') is invalid)'));
-      else {
-        let options = {
-          audio: !!stream && stream.getAudioTracks().length > 0,
-          video: !!stream && stream.getVideoTracks().length > 0,
-          dataChannel: opt && !!opt.dataChannel
-        };
-        provider.sendInvite(uid, options).then(cid => {
-          if(!endpoints[uid])
-            endpoints[uid] = {};
-          let e = new ItoEndpoint(uid, cid, true, opt.dataChannel);
-          e.inputStream = stream;
-          endpoints[uid][cid] = e;
-          resolve(e);
-        });
-      }
-    });
-  };
-
   function onEndpointStateChange(uid, cid, s) {
-    if(!endpoints[uid] || !endpoints[uid][cid])
+    if (!endpoints[uid] || !endpoints[uid][cid])
       return;
     let e = endpoints[uid][cid];
-    if(e.state !== s) {
+    if (e.state !== s) {
       e.state = s;
       e.emit(new ItoEndpointStateChangeEvent(e));
     }
   }
 
   function onFriendOffline(uid) {
-    if(friends[uid] && friends[uid].status !== 'online') {
+    if (friends[uid] && friends[uid].status !== 'online') {
       Object.keys(endpoints).forEach(cid => {
-        onClose({ uid: uid, cid: cid });
+        provider.onClose({ uid: uid, cid: cid });
       });
       endpoints[uid] = {};
     }
   }
 
-  function onInvite(options) {
-    let uid = options.uid;
-    let cid = options.cid;
-    if(!MediaStream || !RTCPeerConnection)
-      provider.sendReject(uid, cid, 'incompatible');
-    else if(endpoints[uid] && endpoints[uid][cid])
-      provider.sendReject(uid, cid, 'unexpected_id');
-    else {
-      if(!endpoints[uid])
-        endpoints[uid] = {};
-      let e = new ItoEndpoint(uid, cid, false, options.dataChannel);
-      e.setReceiveTrack(options);
-      endpoints[uid][cid] = e;
-      ito.emit(new ItoInviteEvent(e));
-    }
-  }
-  ItoProvider.prototype.onInvite = onInvite;
-
-  function onReconnect(options) {
-    let uid = options.uid;
-    let cid = options.cid;
-    if(endpoints[uid] && endpoints[uid][cid]) {
-      let e = endpoints[uid][cid];
-      let stream = e.inputStream;
-      let opt = {
-        audio: !!stream && stream.getAudioTracks().length > 0,
-        video: !!stream && stream.getVideoTracks().length > 0
-      };
-      e.setReceiveTrack(options);
-      e.isOfferer = false;
-      provider.sendAccept(uid, cid, opt).then(() => {
-        onEndpointStateChange(uid, cid, 'connecting');
-        createPeerConnection(e);
-      });
-    }
-  }
-  ItoProvider.prototype.onReconnect = onReconnect;
-
-  function onAcceptInvite(options) {
-    let uid = options.uid;
-    let cid = options.cid;
-    if(endpoints[uid] && endpoints[uid][cid]) {
-      let e = endpoints[uid][cid];
-      e.setReceiveTrack(options);
-      createPeerConnection(e);
-    }
-  }
-  ItoProvider.prototype.onAcceptInvite = onAcceptInvite;
-
-  function onClose(options) {
-    let uid = options.uid;
-    let cid = options.cid;
-    if(endpoints[uid] && endpoints[uid][cid]) {
-      let e = endpoints[uid][cid];
-      let opt = epOpt[uid][cid];
-      let pc = e.peerConnection;
-      if(pc)
-        pc.close();
-      onEndpointStateChange(uid, cid, 'closed');
-      delete endpoints[uid][cid];
-      delete epOpt[uid][cid];
-      if(opt.reject) {
-        const reason = options.reason ? options.rejected : 'terminated';
-        opt.reject(new Error(reason));
-        if(e.isOfferer) {
-          e.emit(new ItoEndpointRejectEvent(e, reason));
-          return;
-        }
-      }
-      e.emit(new ItoEndpointEvent('close', e));
-    }
-  }
-  ItoProvider.prototype.onClose = onClose;
-
-  function onSignaling(options) {
-    let uid = options.uid;
-    let cid = options.cid;
-    if(endpoints[uid] && endpoints[uid][cid]) {
-      let e = endpoints[uid][cid];
-      switch(options.signalingType) {
-      case 'sdp':
-        setRemoteSdp(e, options.data);
-        break;
-      case 'iceCandidate':
-        addIceCandidate(e, options.data);
-        break;
-      }
-    }
-  }
-  ItoProvider.prototype.onSignaling = onSignaling;
-
   function updateStream(e, stream) {
     let s = e.receivedStream;
-    if(!s) {
+    if (!s) {
       console.log('stream', stream);
       e.receivedStream = stream;
       e.emit(new ItoEndpointAddStreamEvent(e, stream));
     }
     else {
-      if(s === stream)
+      if (s === stream)
         return;
       else {
         s.getTracks().filter(track => {
@@ -571,7 +663,7 @@
     let cid = e.connection;
     let opt = epOpt[uid][cid];
     e.dataChannel.addEventListener('message', onDataChannelMessage.bind(this, e));
-    while(opt.buffer.length > 0) {
+    while (opt.buffer.length > 0) {
       e.send(opt.buffer.shift());
     }
   }
@@ -580,13 +672,13 @@
     let uid = e.peer;
     let cid = e.connection;
     let opt = epOpt[uid][cid];
-    if(e.peerConnection)
+    if (e.peerConnection)
       opt.peerConnection = e.peerConnection;
     let pc = new RTCPeerConnection(pcOpt);
     onEndpointStateChange(uid, cid, 'connecting');
     e.peerConnection = pc;
     pc.addEventListener('icecandidate', onIceCandidate.bind(pc, e));
-    if(useTrack)
+    if (useTrack)
       pc.addEventListener('track', event => {
         updateStream(e, event.streams[0]);
       });
@@ -595,15 +687,15 @@
         updateStream(e, event.stream);
       });
     pc.addEventListener('iceconnectionstatechange', () => {
-      if(e.state === 'connecting' && pc.iceConnectionState.match(/^(connected|completed)$/)) {
+      if (e.state === 'connecting' && pc.iceConnectionState.match(/^(connected|completed)$/)) {
         let resolve = opt.resolve;
-        if(resolve) {
+        if (resolve) {
           delete opt.resolve;
           delete opt.reject;
           resolve();
         }
         onEndpointStateChange(uid, cid, 'open');
-        if(!opt.peerConnection) {
+        if (!opt.peerConnection) {
           e.emit(new ItoEndpointEvent('open', e));
         }
         else {
@@ -616,13 +708,13 @@
           opt.negotiationReady = false;
           opt.negotiationNeeded = true;
           console.log('negotiationready', opt.negotiationReady);
-          if(f)
+          if (f)
             sendReconnect(e);
         });
       }
     });
-    if(opt.useDataChannel) {
-      if(e.isOfferer) {
+    if (opt.useDataChannel) {
+      if (e.isOfferer) {
         e.dataChannel = pc.createDataChannel('ItoEndpoint');
         e.dataChannel.addEventListener('open', onDataChannelOpen.bind(this, e));
       }
@@ -633,14 +725,14 @@
           e.emit(new ItoEndpointEvent('datachannel'));
         });
     }
-    if(e.inputStream) {
-      if(useTransceiver) {
+    if (e.inputStream) {
+      if (useTransceiver) {
         e.inputStream.getTracks().forEach(track => {
           // TODO: replace the following line into codes using addTransceiver()
         });
       }
       else {
-        if(useTrack) {
+        if (useTrack) {
           e.inputStream.getTracks().forEach(track => {
             pc.addTrack(track, e.inputStream);
           });
@@ -649,14 +741,14 @@
           pc.addStream(e.inputStream);
       }
     }
-    if(e.isOfferer)
+    if (e.isOfferer)
       sendOffer(e);
   }
 
   function createSdpOptions(e) {
     let opt = epOpt[e.peer][e.connection];
     let sdpOpt = {};
-    if(opt && !useTransceiver) {
+    if (opt && !useTransceiver) {
       sdpOpt = {
         offerToReceiveAudio: opt.receiveAudioTrack,
         offerToReceiveVideo: opt.receiveVideoTrack
@@ -674,7 +766,7 @@
     Object.keys(endpoints).forEach(uid => {
       Object.keys(endpoints[uid]).forEach(cid => {
         let e = endpoints[uid][cid];
-        if(e.isOfferer && e.peerConnection.iceConnectionState.match(/^(disconnected|failed)$/))
+        if (e.isOfferer && e.peerConnection.iceConnectionState.match(/^(disconnected|failed)$/))
           sendReconnect(e);
       });
     });
@@ -706,7 +798,7 @@
   }
 
   function onIceCandidate(e, event) {
-    if(event.candidate)
+    if (event.candidate)
       provider.sendSignaling(e.peer, e.connection, 'iceCandidate', event.candidate);
   }
 
@@ -715,7 +807,7 @@
     let sdp = new RTCSessionDescription(JSON.parse(data));
     pc.setRemoteDescription(sdp).then(() => {
       console.log('remote', sdp.type);
-      if(sdp.type === 'offer')
+      if (sdp.type === 'offer')
         pc.createAnswer(createSdpOptions(e)).then(onSdp.bind(pc, e));
     }, error => {
       console.log(error);
@@ -729,351 +821,318 @@
   /*
    * Communication Endpoint
    */
-  let epOpt = {};
-
-  var ItoEndpointEvent = function(type, endpoint) {
-    this.type = type;
-    this.target = endpoint;
-  }
-  Object.setPrototypeOf(ItoEndpointEvent.prototype, ItoEvent.prototype);
-
-  var ItoEndpointStateChangeEvent = function(endpoint) {
-    ItoEndpointEvent.call(this, 'statechange', endpoint);
-    this.state = endpoint.state;
-  }
-  Object.setPrototypeOf(ItoEndpointStateChangeEvent.prototype, ItoEndpointEvent.prototype);
-
-  var ItoEndpointRejectEvent = function(endpoint, reason) {
-    ItoEndpointEvent.call(this, 'reject', endpoint);
-    this.reason = reason;
-  }
-  Object.setPrototypeOf(ItoEndpointRejectEvent.prototype, ItoEndpointEvent.prototype);
-
-  var ItoEndpointAddStreamEvent = function(endpoint, stream) {
-    ItoEndpointEvent.call(this, 'addstream', endpoint);
-    this.stream = stream;
-  }
-  Object.setPrototypeOf(ItoEndpointAddStreamEvent.prototype, ItoEndpointEvent.prototype);
-
-  var ItoEndpointRemoveStreamEvent = function(endpoint, stream) {
-    ItoEndpointEvent.call(this, 'removestream', endpoint);
-    this.stream = stream;
-  }
-  Object.setPrototypeOf(ItoEndpointRemoveStreamEvent.prototype, ItoEndpointEvent.prototype);
-
-  var ItoEndpointMessageEvent = function(endpoint, data) {
-    ItoEndpointEvent.call(this, 'message', endpoint);
-    this.data = data;
-  }
-  Object.setPrototypeOf(ItoEndpointMessageEvent.prototype, ItoEndpointEvent.prototype);
-
-  var ItoEndpoint = function(uid, cid, isOfferer, data) {
-    this.peer = uid;
-    this.connection = cid;
-    this.state = isOfferer ? 'inviting' : 'invited';
-    this.isOfferer = isOfferer;
-    this.peerConnection = null;
-    this.dataChannel = null;
-    this.inputStream = null;
-    this.receivedStream = null;
-    if(!epOpt[uid])
-      epOpt[uid] = {};
-    epOpt[uid][cid] = {
-      receiveAudioTrack: false,
-      receiveVideoTrack: false,
-      useDataChannel: !!data,
-      buffer: []
+  class ItoEndpointEvent extends ItoEvent {
+    constructor(type, endpoint) {
+      super(type);
+      this.target = endpoint;
     }
-    this.ready = new Promise(((resolve, reject) => {
-      const uid = this.peer;
-      const cid = this.connection;
-      epOpt[uid][cid].resolve = resolve;
-      epOpt[uid][cid].reject = reject;
-    }).bind(this));
-  };
-  Object.setPrototypeOf(ItoEndpoint.prototype, ItoEmitter.prototype);
+  }
 
-  ItoEndpoint.prototype.setInputStream = function(stream) {
-    if(stream && !(stream instanceof MediaStream))
-      throw new Error('the first parameter is not an instance of MediaStream');
-    let opt = epOpt[this.peer][this.connection];
-    if(stream === this.inputStream)
-      return;
-    let oldStream = this.inputStream;
-    this.inputStream = stream;
-    let pc = this.peerConnection;
-    if(pc && this.state === 'open') {
-      opt.negotiationReady = false;
-      opt.negotiationNeeded = false;
-      if(useTrack) {
-        if(oldStream) {
-          oldStream.getTracks().filter(track => {
-            let f = true;
-            if(stream)
-              stream.getTracks().forEach(t => {
-                f = f && track !== t;
+  class ItoEndpointStateChangeEvent extends ItoEndpointEvent {
+    constructor(endpoint) {
+      super('statechange', endpoint);
+      this.state = endpoint.state;
+    }
+  }
+
+  class ItoEndpointRejectEvent extends ItoEndpointEvent {
+    constructor(endpoint, reason) {
+      super('reject', endpoint);
+      this.reason = reason;
+    }
+  }
+
+  class ItoEndpointAddStreamEvent extends ItoEndpointEvent {
+    constructor(endpoint, stream) {
+      super('addstream', endpoint);
+      this.stream = stream;
+    }
+  }
+
+  class ItoEndpointRemoveStreamEvent extends ItoEndpointEvent {
+    constructor(endpoint, stream) {
+      super('removestream', endpoint);
+      this.stream = stream;
+    }
+  }
+
+  class ItoEndpointMessageEvent extends ItoEndpointEvent {
+    constructor(endpoint, data) {
+      super('message', endpoint);
+      this.data = data;
+    }
+  }
+
+  class ItoEndpoint extends ItoEmitter {
+    constructor(uid, cid, isOfferer, data) {
+      super();
+      this.peer = uid;
+      this.connection = cid;
+      this.state = isOfferer ? 'inviting' : 'invited';
+      this.isOfferer = isOfferer;
+      this.peerConnection = null;
+      this.dataChannel = null;
+      this.inputStream = null;
+      this.receivedStream = null;
+      if (!epOpt[uid])
+        epOpt[uid] = {};
+      epOpt[uid][cid] = {
+        receiveAudioTrack: false,
+        receiveVideoTrack: false,
+        useDataChannel: !!data,
+        buffer: []
+      }
+      this.ready = new Promise(((resolve, reject) => {
+        const uid = this.peer;
+        const cid = this.connection;
+        epOpt[uid][cid].resolve = resolve;
+        epOpt[uid][cid].reject = reject;
+      }).bind(this));
+    }
+
+    setInputStream(stream) {
+      if (stream && !(stream instanceof MediaStream))
+        throw new Error('the first parameter is not an instance of MediaStream');
+      let opt = epOpt[this.peer][this.connection];
+      if (stream === this.inputStream)
+        return;
+      let oldStream = this.inputStream;
+      this.inputStream = stream;
+      let pc = this.peerConnection;
+      if (pc && this.state === 'open') {
+        opt.negotiationReady = false;
+        opt.negotiationNeeded = false;
+        if (useTrack) {
+          if (oldStream) {
+            oldStream.getTracks().filter(track => {
+              let f = true;
+              if (stream)
+                stream.getTracks().forEach(t => {
+                  f = f && track !== t;
+                });
+              return f;
+            }).forEach(track => {
+              pc.getSenders().forEach(sender => {
+                if (sender.track === track)
+                  pc.removeTrack(sender);
               });
-            return f;
-          }).forEach(track => {
-            pc.getSenders().forEach(sender => {
-              if(sender.track === track)
-                pc.removeTrack(sender);
             });
+          }
+          if (stream) {
+            stream.getTracks().forEach(track => {
+              pc.getSenders().forEach(sender => {
+                if (sender.track !== track)
+                  pc.addTrack(track, stream);
+              })
+            })
+          }
+        }
+        else {
+          if (oldStream)
+            pc.removeStream(oldStream);
+          if (stream)
+            pc.addStream(stream);
+        }
+        opt.negotiationReady = true;
+        if (opt.negotiationNeeded)
+          sendReconnect(this);
+      }
+    }
+
+    setReceiveTrack(arg) {
+      let opt = epOpt[this.peer][this.connection];
+      opt.receiveAudioTrack = !!arg.audio;
+      opt.receiveVideoTrack = !!arg.video;
+    }
+
+    accept(stream, opt) {
+      return new Promise((resolve, reject) => {
+        if (this.isOfferer)
+          reject(new Error('not answerer'));
+        else if (this.state !== 'invited')
+          reject(new Error('state is not \'invited\''));
+        else if (MediaStream && stream && !(stream instanceof MediaStream))
+          reject(new Error('the first parameter (\'stream\') is invalid)'));
+        else {
+          let uid = this.peer;
+          let cid = this.connection;
+          let options = {
+            audio: !!stream && stream.getAudioTracks().length > 0,
+            video: !!stream && stream.getVideoTracks().length > 0
+          };
+          this.inputStream = stream;
+          provider.sendAccept(uid, cid, options).then((() => {
+            resolve();
+            onEndpointStateChange(uid, cid, 'connecting');
+            createPeerConnection(this);
+          }).bind(this));
+        }
+      });
+    }
+
+    reject() {
+      return new Promise((resolve, reject) => {
+        if (this.isOfferer)
+          reject(new Error('not answerer'));
+        else if (this.state !== 'invited')
+          reject(new Error('state is not \'invited\''));
+        else {
+          provider.sendReject(this.peer, this.connection, 'rejected').then(() => {
+            resolve();
+            provider.onClose({ uid: this.peer, cid: this.connection });
           });
         }
-        if(stream) {
-          stream.getTracks().forEach(track => {
-            pc.getSenders().forEach(sender => {
-              if(sender.track !== track)
-                pc.addTrack(track, stream);
-            })
-          })
+      });
+    }
+
+    send(d) {
+      let c = this.dataChannel;
+      if (!c)
+        throw new Error('data channel not open');
+      else {
+        let opt = epOpt[this.peer][this.connection];
+        switch (this.peerConnection.iceConnectionState) {
+          case 'connected':
+          case 'completed':
+            c.send(d);
+            break;
+          case 'disconnected':
+          case 'failed':
+            opt.buffer.push(d);
+            break;
+          default:
+            throw new Error('data channel not open');
         }
       }
-      else {
-        if(oldStream)
-          pc.removeStream(oldStream);
-        if(stream)
-          pc.addStream(stream);
-      }
-      opt.negotiationReady = true;
-      if(opt.negotiationNeeded)
-        sendReconnect(this);
+    }
+
+    close() {
+      return new Promise((resolve, reject) => {
+        provider.sendClose(this.peer, this.connection).then(() => {
+          resolve();
+          provider.onClose({ uid: this.peer, cid: this.connection });
+        })
+      });
     }
   }
-
-  ItoEndpoint.prototype.setReceiveTrack = function(arg) {
-    let opt = epOpt[this.peer][this.connection];
-    opt.receiveAudioTrack = !!arg.audio;
-    opt.receiveVideoTrack = !!arg.video;
-  }
-
-  ItoEndpoint.prototype.accept = function(stream, opt) {
-    return new Promise((resolve, reject) => {
-      if(this.isOfferer)
-        reject(new Error('not answerer'));
-      else if(this.state !== 'invited')
-        reject(new Error('state is not \'invited\''));
-      else if(MediaStream && stream && !(stream instanceof MediaStream))
-        reject(new Error('the first parameter (\'stream\') is invalid)'));
-      else {
-        let uid = this.peer;
-        let cid = this.connection;
-        let options = {
-          audio: !!stream && stream.getAudioTracks().length > 0,
-          video: !!stream && stream.getVideoTracks().length > 0
-        };
-        this.inputStream = stream;
-        provider.sendAccept(uid, cid, options).then((() => {
-          resolve();
-          onEndpointStateChange(uid, cid, 'connecting');
-          createPeerConnection(this);
-        }).bind(this));
-      }
-    });
-  };
-
-  ItoEndpoint.prototype.reject = function() {
-    return new Promise((resolve, reject) => {
-      if(this.isOfferer)
-        reject(new Error('not answerer'));
-      else if(this.state !== 'invited')
-        reject(new Error('state is not \'invited\''));
-      else {
-        provider.sendReject(this.peer, this.connection, 'rejected').then(() => {
-          resolve();
-          onClose({ uid: this.peer, cid: this.connection });
-        });
-      }
-    });
-  };
-
-  ItoEndpoint.prototype.send = function(d) {
-    let c = this.dataChannel;
-    if(!c)
-      throw new Error('data channel not open');
-    else {
-      let opt = epOpt[this.peer][this.connection];
-      switch(this.peerConnection.iceConnectionState) {
-      case 'connected':
-      case 'completed':
-        c.send(d);
-        break;
-      case 'disconnected':
-      case 'failed':
-        opt.buffer.push(d);
-        break;
-      default:
-        throw new Error('data channel not open');
-      }
-    }
-  };
-
-  ItoEndpoint.prototype.close = function() {
-    return new Promise((resolve, reject) => {
-      provider.sendClose(this.peer, this.connection).then(() => {
-        resolve();
-        onClose({ uid: this.peer, cid: this.connection });
-      })
-    });
-  };
 
   /*
    * Client: Simple Data Store Sharing
    */
-  let scopes = {};
-  let observers = {};
 
-  var ItoDataStore = function(scope, name) {
-    scopes[name] = scope;
-    this.name = name;
-    Object.defineProperties(this, {
-      scope: {
-        get: () => { return scopes[this.name]; }
-      }
-    });
-  };
-  // Object.setPrototypeOf(ItoDataStore.prototype, ItoEmitter.prototype);
-
-  var ItoDataElement = function(dataStore, key, data) {
-    this.dataStore = dataStore;
-    this.key = key;
-    this.data = data;
-    Object.defineProperties(this, {
-      dataStore: {
-        enumerable: false
-      }
-    });
-  };
-
-  ItoDataStore.prototype.put = function(key, data) {
-    if(!this.scope)
-      return Promise.reject(new Error('the data store is already reset.'));
-    return provider.putDataElement(this.scope, this.name, key, data);
-  };
-
-  ItoDataStore.prototype.get = function(key) {
-    if(!this.scope)
-      return Promise.reject(new Error('the data store is already reset.'));
-    return provider.getDataElement(this.scope, this.name, key).then(result => {
-      return new ItoDataElement(this, result.key, result.data);
-    });
-  };
-
-  ItoDataStore.prototype.getAll = function() {
-    if(!this.scope)
-      return Promise.reject(new Error('the data store is already reset.'));
-    return provider.getAllDataElements(this.scope, this.name).then(result => {
-      let elements = [];
-      Object.keys(result || []).forEach(key => {
-        elements.push(new ItoDataElement(this, key, result[key]));
-      });
-      return elements;
-    });
-  };
-
-  ItoDataStore.prototype.remove = function(key) {
-    if(!this.scope)
-      return Promise.reject(new Error('the data store is already reset.'));
-    return provider.removeDataElement(this.scope, this.name, key);
-  };
-
-  ItoDataStore.prototype.removeAll = function(key) {
-    if(!this.scope)
-      return Promise.reject(new Error('the data store is already reset.'));
-    return provider.removeAllDataElements(this.scope, this.name);
-  };
-
-  ItoDataStore.prototype.reset = function() {
-    if(!this.scope)
-      return Promise.reject(new Error('the data store is already reset.'));
-    return provider.removeDataStore(this.scope, this.name).then(() => {
-      delete scopes[this.name];
-    });
-  };
-
-  var ItoDataObserver = function(uid, dataStore) {
-    this.uid = uid;
-    this.dataStore = dataStore;
-  };
-  Object.setPrototypeOf(ItoDataObserver.prototype, ItoEmitter.prototype);
-
-  var ItoDataObserverEvent = function(type, observer) {
-    this.type = type;
-    this.target = observer;
-  }
-  Object.setPrototypeOf(ItoDataObserverEvent.prototype, ItoEvent.prototype);
-
-  var ItoDataObserverElementEvent = function(observer, type, key, data) {
-    ItoDataObserverEvent.call(this, 'element' + type, observer);
-    this.key = key;
-    this.data = data;
-  };
-  Object.setPrototypeOf(ItoDataObserverElementEvent.prototype, ItoDataObserverEvent.prototype);
-
-  ito.openDataStore = (name, opt) => {
-    let scope = 'private';
-    if(opt) {
-      if(typeof opt.scope === 'string' && opt.scope.match(/^(public|friends|private)$/))
-        scope = opt.scope;
-      else
-        throw new Error('the "scope" option must be "public", "friends" or "private".');
+  class ItoDataStore /* extends ItoEmitter */ {
+    constructor(scope, name) {
+      // super();
+      scopes[name] = scope;
+      this.name = name;
     }
-    if(!(typeof name === 'string') || !name.match(/^.+$/))
-      throw new Error('the specified data store name includes illegal letter(s).');
-    return provider.openDataStore(scope, name).then(s => {
-      return new ItoDataStore(s, name);
-    });
+
+    get scope() {
+      return scopes[this.name];
+    }
+
+    put(key, data) {
+      if (!this.scope)
+        return Promise.reject(new Error('the data store is already reset.'));
+      return provider.putDataElement(this.scope, this.name, key, data);
+    }
+
+    get(key) {
+      if (!this.scope)
+        return Promise.reject(new Error('the data store is already reset.'));
+      return provider.getDataElement(this.scope, this.name, key).then(result => {
+        return new ItoDataElement(this, result.key, result.data);
+      });
+    }
+
+    getAll() {
+      if (!this.scope)
+        return Promise.reject(new Error('the data store is already reset.'));
+      return provider.getAllDataElements(this.scope, this.name).then(result => {
+        let elements = [];
+        Object.keys(result || []).forEach(key => {
+          elements.push(new ItoDataElement(this, key, result[key]));
+        });
+        return elements;
+      });
+    }
+
+    remove(key) {
+      if (!this.scope)
+        return Promise.reject(new Error('the data store is already reset.'));
+      return provider.removeDataElement(this.scope, this.name, key);
+    }
+
+    removeAll(key) {
+      if (!this.scope)
+        return Promise.reject(new Error('the data store is already reset.'));
+      return provider.removeAllDataElements(this.scope, this.name);
+    }
+
+    reset() {
+      if (!this.scope)
+        return Promise.reject(new Error('the data store is already reset.'));
+      return provider.removeDataStore(this.scope, this.name).then(() => {
+        delete scopes[this.name];
+      });
+    }
+  }
+
+  class ItoDataElement {
+    constructor(dataStore, key, data) {
+      this.dataStore = dataStore;
+      this.key = key;
+      this.data = data;
+      Object.defineProperties(this, {
+        dataStore: {
+          enumerable: false
+        }
+      });
+    }
+  }
+
+  class ItoDataObserver extends ItoEmitter {
+    constructor(uid, dataStore) {
+      super();
+      this.uid = uid;
+      this.dataStore = dataStore;
+    }
+
+    disconnect() {
+      provider.disconnectDataStoreObserver(this.uid, this.dataStore);
+    }
   };
 
-  ito.observeDataStore = (uid, name) => {
-    return provider.observeDataStore(uid, name).then(arg => {
-      if(!(arg.uid in observers))
-        observers[arg.uid] = {};
-      let observer = new ItoDataObserver(arg.uid, arg.name);
-      observers[arg.uid][arg.name] = observer;
-      return observer;
-    });
-  };
-
-  function onElementAdd(uid, name, key, data) {
-    if(!(uid in observers) || !(name in observers[uid]))
-      return;
-    let observer = observers[uid][name];
-    observer.emit(new ItoDataObserverElementEvent(observer, 'add', key, data));
+  class ItoDataObserverEvent extends ItoEvent {
+    constructor(type, observer) {
+      super();
+      this.type = type;
+      this.target = observer;
+    }
   }
-  ItoProvider.prototype.onElementAdd = onElementAdd;
 
-  function onElementUpdate(uid, name, key, data) {
-    if(!(uid in observers) || !(name in observers[uid]))
-      return;
-    let observer = observers[uid][name];
-    observer.emit(new ItoDataObserverElementEvent(observer, 'update', key, data));
+  class ItoDataObserverElementEvent extends ItoDataObserverEvent {
+    constructor(observer, type, key, data) {
+      super('element' + type, observer);
+      this.key = key;
+      this.data = data;
+    }
   }
-  ItoProvider.prototype.onElementUpdate = onElementUpdate;
-
-  function onElementRemove(uid, name, key) {
-    if(!(uid in observers) || !(name in observers[uid]))
-      return;
-    let observer = observers[uid][name];
-    observer.emit(new ItoDataObserverElementEvent(observer, 'remove', key));
-  }
-  ItoProvider.prototype.onElementRemove = onElementRemove;
 
   /*
    * Client Properties
    */
   Object.defineProperties(ito, {
-    state: { get: () => { return state; }},
-    profile: { get: () => { return profile; }},
-    passcode: { get: () => { return provider.getPasscode(); }},
+    state: { get: () => { return state; } },
+    profile: { get: () => { return profile; } },
+    passcode: { get: () => { return provider.getPasscode(); } },
     peerConnectionOptions: {
       get: () => { return pcOpt; },
-      set: opt => { if(opt instanceof Object) pcOpt = Object.assign(pcOpt); }
+      set: opt => { if (opt instanceof Object) pcOpt = Object.assign(pcOpt); }
     }
   });
 
-  if(!isBrowser) {
+  if (!isBrowser) {
     ito.ItoProvider = ItoProvider;
     module.exports = ito;
   }

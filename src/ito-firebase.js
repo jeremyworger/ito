@@ -26,204 +26,15 @@
     throw new Error('Ito base library has not been loaded yet.');
   }
 
-  if(!ito.provider)
-    ito.provider = {};
-  function FirebaseProvider() {};
-  Object.setPrototypeOf(FirebaseProvider.prototype, ItoProvider.prototype);
-  ito.provider.firebase = new FirebaseProvider();
-  let firebaseProvider = ito.provider.firebase;
-
   /*
-   * Firebase Login
+   * Global variables
    */
-  let provider = null;
+  let signin = null;
   let credential = null;
   let initResolve = null;
   let email = null;
   let userName = null;
 
-  firebaseProvider.load = () => {
-    // Initialize Firebase client
-    if(!self.firebase) {
-      // Browser
-      if(isBrowser) {
-        let h = document.querySelector('head');
-        return new Promise((resolve, reject) => {
-          let s = document.createElement('script');
-          s.src = 'https://www.gstatic.com/firebasejs/3.6.4/firebase.js';
-          s.addEventListener('load', () => { resolve(); });
-          s.addEventListener('error', () => { reject(); });
-          h.appendChild(s);
-        });
-      }
-      // Node.js
-      else {
-        self.firebase = require('firebase');
-        return Promise.resolve();
-      }
-    }
-    else
-      return Promise.resolve();
-  };
-
-  firebaseProvider.init = arg => {
-    return new Promise((resolve, reject) => {
-      initResolve = resolve;
-      firebase.initializeApp({
-        apiKey: arg.apiKey,
-        authDomain: arg.authDomain,
-        databaseURL: arg.databaseURL
-      });
-      firebase.auth().onAuthStateChanged(user => {
-        let b = !!user;
-        if(initResolve) {
-          let r = initResolve;
-          initResolve = null;
-          if(user)
-            firebaseGetProfile()
-              .then(firebaseSetOnDisconnectRef)
-              .then(r.bind(this, b));
-          else
-            r(b);
-        }
-        else {
-          if(user)
-            firebaseSetOnDisconnectRef();
-          firebaseProvider.onOnline(b);
-        }
-
-        // Disconnect/Reconnect to Firebase
-        firebase.database().ref('.info/connected').on('value', snapshot => {
-          if(snapshot.val() === true) {
-            if(disconnectRef && getUser()) {
-              disconnectRef.set('online');
-              firebaseSetOnDisconnectRef();
-              if(passcode) {
-                let p = passcode;
-                passcode = null;
-                firebaseSetPasscodeRef(p);
-              }
-            }
-            firebaseProvider.onOnline(!!getUser());
-          }
-          else {
-            firebaseResetPasscodeRef(true);
-            firebaseProvider.onDisconnect();
-          }
-        });
-      });
-    });
-  }
-
-  function getUser() {
-    return firebase.auth().currentUser;
-  }
-  firebaseProvider.getUser = () => {
-    let user = getUser();
-    return user ? {
-      userName: userName,
-      email: email,
-      isAnonymous: user.isAnonymous,
-      uid: user.uid
-    } : null;
-  };
-
-  firebaseProvider.signIn = {
-    anonymous: () => {
-      return firebase.auth().signInAnonymously().then(() => {
-        return firebaseSetProfile();
-      });
-    },
-    google: () => {
-      provider = new firebase.auth.GoogleAuthProvider();
-      provider.addScope('email');
-      return new Promise((resolve, reject) => {
-        firebase.auth().signInWithPopup(provider).then(result => {
-          credential = result.credential;
-          fetch('https://www.googleapis.com/userinfo/v2/me',
-            { headers: { Authorization: 'Bearer ' + credential.accessToken }}
-          ).then(response => {
-            return response.json();
-          }).then(json => {
-            email = json.email;
-            return firebaseSetProfile();
-          }).then(p => {
-            resolve(p);
-          });
-        }, error => {
-          reject(error);
-        })
-      });
-    },
-    facebook: () => {
-      provider = new firebase.auth.FacebookAuthProvider();
-      provider.addScope('email');
-      return new Promise((resolve, reject) => {
-        firebase.auth().signInWithPopup(provider).then(result => {
-          credential = result.credential;
-          fetch('https://graph.facebook.com/v2.7/me?fields=email&access_token=' + credential.accessToken
-          ).then(response => {
-            return response.json();
-          }).then(json => {
-            email = json.email;
-            return firebaseSetProfile();
-          }).then(p => {
-            resolve(p);
-          });
-        }, error => {
-          reject(error);
-        })
-      });
-    },
-    email: (id, pass) => {
-      return new Promise((resolve, reject) => {
-        firebase.auth().signInWithEmailAndPassword(id, pass).then(user => {
-          email = user.email;
-          resolve(firebaseSetProfile());
-        });
-      }, error => {
-        reject(error);
-      });
-    }
-  };
-
-  firebaseProvider.createUser = (id, pass) => {
-    return new Promise((resolve, reject) => {
-      firebase.auth().createUserWithEmailAndPassword(id, pass).then(user => {
-        return firebaseSetProfile(true);
-      }).then(p => {
-        firebaseProvider.signOut().then(() => {
-          resolve(p);
-        });
-      });
-    }, error => {
-      reject(error);
-    });
-  };
-
-  firebaseProvider.signOut = () => {
-    return new Promise((resolve, reject) => {
-      firebaseSetOffline().then(() => {
-        let user = getUser();
-        if(user && user.isAnonymous) {
-          return firebase.database().ref('lastNotificationChecked/' + user.uid).remove()
-            .then(firebase.database().ref('emails/' + firebaseEscape(email)).remove())
-            .then(firebaseDeleteProfile())
-            .then(() => { user.delete(); });
-        }
-        else
-          return firebase.auth().signOut();
-      }).then(() => {
-        resolve();
-      }, error => {
-        reject(error);
-      })
-    });
-  };
-
-  /*
-   * Firebase Database: User Accounts and Status
-   */
   let disconnectRef = null;
   let requestRef = null;
   let friendsRef = null;
@@ -232,10 +43,548 @@
   let passcodesRef = null;
   let passcode = null;
 
+  let messagesRef = null;
+
+  let notificationsRef = null;
+  let lastNotificationChecked = null;
+
+  let signalsRef = null;
+
+  let dataObserverRef = {};
+
+  if(!ito.provider)
+    ito.provider = {};
+
+  class FirebaseProvider extends ItoProvider {
+    constructor(parent) {
+      super(parent);
+      this.signIn = {
+        anonymous: () => {
+          return firebase.auth().signInAnonymously().then(() => {
+            return firebaseSetProfile();
+          });
+        },
+        google: () => {
+          signin = new firebase.auth.GoogleAuthProvider();
+          signin.addScope('email');
+          return new Promise((resolve, reject) => {
+            firebase.auth().signInWithPopup(signin).then(result => {
+              credential = result.credential;
+              fetch('https://www.googleapis.com/userinfo/v2/me',
+                { headers: { Authorization: 'Bearer ' + credential.accessToken }}
+              ).then(response => {
+                return response.json();
+              }).then(json => {
+                email = json.email;
+                return firebaseSetProfile();
+              }).then(p => {
+                resolve(p);
+              });
+            }, error => {
+              reject(error);
+            })
+          });
+        },
+        facebook: () => {
+          signin = new firebase.auth.FacebookAuthProvider();
+          signin.addScope('email');
+          return new Promise((resolve, reject) => {
+            firebase.auth().signInWithPopup(signin).then(result => {
+              credential = result.credential;
+              fetch('https://graph.facebook.com/v2.7/me?fields=email&access_token=' + credential.accessToken
+              ).then(response => {
+                return response.json();
+              }).then(json => {
+                email = json.email;
+                return firebaseSetProfile();
+              }).then(p => {
+                resolve(p);
+              });
+            }, error => {
+              reject(error);
+            })
+          });
+        },
+        email: (id, pass) => {
+          return new Promise((resolve, reject) => {
+            firebase.auth().signInWithEmailAndPassword(id, pass).then(user => {
+              email = user.email;
+              resolve(firebaseSetProfile());
+            });
+          }, error => {
+            reject(error);
+          });
+        }
+      };
+    }
+
+    /*
+     * Firebase Login
+     */
+    load() {
+      // Initialize Firebase client
+      if(!self.firebase) {
+        // Browser
+        if(isBrowser) {
+          let h = document.querySelector('head');
+          return new Promise((resolve, reject) => {
+            let s = document.createElement('script');
+            s.src = 'https://www.gstatic.com/firebasejs/3.6.4/firebase.js';
+            s.addEventListener('load', () => { resolve(); });
+            s.addEventListener('error', () => { reject(); });
+            h.appendChild(s);
+          });
+        }
+        // Node.js
+        else {
+          self.firebase = require('firebase');
+          return Promise.resolve();
+        }
+      }
+      else
+        return Promise.resolve();
+    }
+
+    init(arg) {
+      return new Promise((resolve, reject) => {
+        initResolve = resolve;
+        firebase.initializeApp({
+          apiKey: arg.apiKey,
+          authDomain: arg.authDomain,
+          databaseURL: arg.databaseURL
+        });
+        firebase.auth().onAuthStateChanged(user => {
+          let b = !!user;
+          if(initResolve) {
+            let r = initResolve;
+            initResolve = null;
+            if(user)
+              firebaseGetProfile()
+                .then(firebaseSetOnDisconnectRef)
+                .then(() => { r(b); });
+            else
+              r(b);
+          }
+          else {
+            if(user)
+              firebaseSetOnDisconnectRef();
+            this.onOnline(b);
+          }
+
+          // Disconnect/Reconnect to Firebase
+          firebase.database().ref('.info/connected').on('value', snapshot => {
+            if(snapshot.val() === true) {
+              if(disconnectRef && getUser()) {
+                disconnectRef.set('online');
+                firebaseSetOnDisconnectRef();
+                if(passcode) {
+                  let p = passcode;
+                  passcode = null;
+                  firebaseSetPasscodeRef(p);
+                }
+              }
+              this.onOnline(!!getUser());
+            }
+            else {
+              firebaseResetPasscodeRef(true);
+              this.onDisconnect();
+            }
+          });
+        });
+      });
+    }
+
+    getUser() {
+      let user = getUser();
+      return user ? {
+        userName: userName,
+        email: email,
+        isAnonymous: user.isAnonymous,
+        uid: user.uid
+      } : null;
+    }
+
+    createUser(id, pass) {
+      return new Promise((resolve, reject) => {
+        firebase.auth().createUserWithEmailAndPassword(id, pass).then(user => {
+          return firebaseSetProfile(true);
+        }).then(p => {
+          this.signOut().then(() => {
+            resolve(p);
+          });
+        });
+      }, error => {
+        reject(error);
+      });
+    }
+
+    signOut() {
+      return new Promise((resolve, reject) => {
+        firebaseSetOffline().then(() => {
+          let user = getUser();
+          if(user && user.isAnonymous) {
+            return firebase.database().ref('lastNotificationChecked/' + user.uid).remove()
+              .then(firebase.database().ref('emails/' + firebaseEscape(email)).remove())
+              .then(firebaseDeleteProfile())
+              .then(() => {
+                user.delete();
+                email = null;
+                userName = null;
+              });
+          }
+          else
+            return firebase.auth().signOut();
+        }).then(() => {
+          resolve();
+        }, error => {
+          reject(error);
+        })
+      });
+    }
+
+    /*
+     * Firebase Database: User Accounts and Status
+     */
+    getPasscode() {
+      return passcode;
+    }
+
+    setPasscode(pass) {
+      return firebaseSetPasscodeRef(pass);
+    }
+
+    sendRequest(m, opt) {
+      return new Promise((resolve, reject) => {
+        let user = getUser();
+        let e = firebaseEscape(m);
+        let ref = firebase.database().ref('requests/' + e).push();
+        firebase.database().ref('requestKeys/' + user.uid + '/' + e).set(ref.key).then(() => {
+          let arg = {
+            type: 'request',
+            email: email,
+            userName: user.displayName,
+            uid: user.uid
+          };
+          if(opt)
+            arg.options = opt;
+          return ref.set(arg);
+        }).then(() => {
+          resolve(ref.key);
+        }, () => {
+          reject(new Error('No user for requested email address or passcode exists.'));
+        });
+      });
+    }
+
+    sendRemove(uid, m) {
+      return new Promise((resolve, reject) => {
+        let user = getUser();
+        let e = firebaseEscape(m);
+        let ref = firebase.database().ref('requests/' + e).push();
+        firebase.database().ref('friends/' + user.uid + '/' + uid).remove().then(() => {
+          return ref.set({
+            type: 'remove',
+            uid: user.uid
+          });
+        }).then(() => {
+          resolve();
+        })
+      });
+    }
+
+    dropRequest(key, passcode) {
+      dropRequest(key, passcode);
+    }
+
+    acceptRequest(key, m, uid, usePasscode) {
+      return new Promise((resolve, reject) => {
+        let user = getUser();
+        let ref = firebase.database().ref('requests/' + firebaseEscape(m)).push();
+        firebaseAddFriend(uid).then(() => {
+          let arg = {
+            type: 'accept',
+            email: email,
+            userName: user.displayName,
+            uid: user.uid,
+            requestKey: key
+          };
+          if(usePasscode) {
+            arg.passcode = passcode;
+            firebaseResetPasscodeRef();
+          }
+          return ref.set(arg);
+        }).then(
+          firebaseFinishRequest(usePasscode ? passcode : firebaseEscape(email), uid)
+        ).then(() => {
+          resolve();
+        });
+      });
+    }
+
+    rejectRequest(key, m, uid, usePasscode) {
+      return new Promise((resolve, reject) => {
+        let ref = firebase.database().ref('requests/' + firebaseEscape(m)).push();
+        let arg = {
+          type: 'reject',
+          email: email,
+          requestKey: key
+        };
+        if(usePasscode)
+          arg.passcode = passcode;
+        ref.set(arg).then(
+          firebaseFinishRequest(usePasscode ? passcode : firebaseEscape(email), uid)
+        ).then(() => {
+          resolve();
+        });
+      });
+    }
+
+    /*
+     * Firebase Database: Chat Messages
+     */
+    sendMessage(uid, msg) {
+      let user = getUser();
+      if(messagesRef) {
+        let ref = firebase.database().ref('messages/' + uid).push();
+        return ref.set({
+          type: 'message',
+          uid: user.uid,
+          data: msg
+        }).then(() => {
+          return { uid: uid, messageKey: ref.key };
+        });
+      }
+      else {
+        return Promise.reject(new Error('cannot send message: not online'));
+      }
+    }
+
+    /*
+     * Firebase Database: Notifications
+     */
+    sendNotification(msg) {
+      return new Promise((resolve, reject) => {
+        let ref = firebase.database().ref('notifications').push();
+        ref.set({
+          data: msg,
+          timestamp: firebase.database.ServerValue.TIMESTAMP
+        }).then(() => {
+          firebaseClearOldNotifications();
+          resolve();
+        }, () => {
+          reject(new Error('the current user is not permitted to send a notification'));
+        });
+      });
+    }
+
+    /*
+     * Firebase Database: WebRTC Signaling Messages
+     */
+    sendInvite(uid, opt) {
+      return new Promise((resolve, reject) => {
+        let user = getUser();
+        let ref = firebase.database().ref('signals/' + uid).push();
+        ref.set({
+          type: 'invite',
+          uid: user.uid,
+          cid: ref.key,
+          audio: opt.audio,
+          video: opt.video,
+          dataChannel: !!opt.dataChannel
+        }).then(() => {
+          ref.onDisconnect().remove();
+          resolve(ref.key);
+        })
+      });
+    }
+
+    sendAccept(uid, cid, opt) {
+      return new Promise((resolve, reject) => {
+        let user = getUser();
+        let ref = firebase.database().ref('signals/' + uid).push();
+        ref.set({
+          type: 'accept',
+          uid: user.uid,
+          cid: cid,
+          audio: opt.audio,
+          video: opt.video
+        }).then(() => {
+          resolve();
+        })
+      });
+    }
+
+    sendReject(uid, cid, reason) {
+      return new Promise((resolve, reject) => {
+        let user = getUser();
+        let ref = firebase.database().ref('signals/' + uid).push();
+        ref.set({
+          type: 'reject',
+          uid: user.uid,
+          cid: cid,
+          reason: reason
+        }).then(() => {
+          resolve();
+        })
+      });
+    }
+
+    sendReconnect(uid, cid, opt) {
+      return new Promise((resolve, reject) => {
+        let user = getUser();
+        let ref = firebase.database().ref('signals/' + uid).push();
+        ref.set({
+          type: 'reconnect',
+          uid: user.uid,
+          cid: cid,
+          audio: opt.audio,
+          video: opt.video,
+          dataChannel: !!opt.dataChannel
+        }).then(() => {
+          resolve();
+        });
+      });
+    }
+
+    sendClose(uid, cid) {
+      return new Promise((resolve, reject) => {
+        let user = getUser();
+        let ref = firebase.database().ref('signals/' + uid).push();
+        ref.set({
+          type: 'close',
+          uid: user.uid,
+          cid: cid
+        }).then(() => {
+          resolve();
+        });
+      });
+    }
+
+    sendSignaling(uid, cid, type, data) {
+      return new Promise((resolve, reject) => {
+        let user = getUser();
+        let ref = firebase.database().ref('signals/' + uid).push();
+        ref.set({
+          type: 'signaling',
+          signalingType: type,
+          uid: user.uid,
+          cid: cid,
+          data: JSON.stringify(data)
+        }).then(() => {
+          resolve();
+        });
+      });
+    }
+
+    /*
+     * Firebase Database: Simple Data Store Sharing
+     */
+    openDataStore(scope, name) {
+      let user = getUser();
+      let ref = firebase.database().ref(
+        'datastorescopes/' + user.uid + '/' + name);
+      return ref.once('value').then(data => {
+        let val = data.val();
+        return val || ref.set(scope).then(() => { return scope; });
+      });
+    }
+
+    removeDataStore(scope, name) {
+      let user = getUser();
+      let dataRef = firebase.database().ref(
+        'datastore/' + user.uid + '/' + name);
+      let scopeRef = firebase.database().ref(
+        'datastorescopes/' + user.uid + '/' + name);
+      return dataRef.remove().then(() => {
+        return scopeRef.remove();
+      });
+    }
+
+    putDataElement(scope, name, key, data) {
+      let user = getUser();
+      let ref = firebase.database().ref(
+        'datastore/' + user.uid + '/' + name + '/' + key);
+      return ref.set(data);
+    }
+
+    getDataElement(scope, name, key) {
+      let user = getUser();
+      let ref = firebase.database().ref(
+        'datastore/' + user.uid + '/' + name + '/' + key);
+      return ref.once('value').then(data => {
+        return { key: data.key, data: data.val() };
+      });
+    }
+
+    getAllDataElements(scope, name) {
+      let user = getUser();
+      let ref = firebase.database().ref(
+        'datastore/' + user.uid + '/' + name);
+      return ref.once('value').then(data => {
+        return data.val();
+      });
+    }
+
+    removeDataElement(scope, name, key) {
+      let user = getUser();
+      let ref = firebase.database().ref(
+        'datastore/' + user.uid + '/' + name + '/' + key);
+      return ref.remove();
+    }
+
+    removeAllDataElements(scope, name) {
+      let user = getUser();
+      let ref = firebase.database().ref('datastore/' + user.uid + '/' + name);
+      return ref.remove();
+    }
+
+    observeDataStore(uid, name) {
+      let ref;
+      if(uid in dataObserverRef && name in dataObserverRef[uid])
+        ref = dataObserverRef[uid][name];
+      else {
+        ref = firebase.database().ref('datastore/' + uid + '/' + name);
+        ref.on('child_added', firebaseObserveElementAdd);
+        ref.on('child_changed', firebaseObserveElementUpdate);
+        ref.on('child_removed', firebaseObserveElementRemove);
+        if(!(uid in dataObserverRef))
+          dataObserverRef[uid] = {};
+        dataObserverRef[uid][name] = ref;
+      }
+      return Promise.resolve({ uid: uid, name: name });
+    };
+
+    disconnectDataStoreObserver(uid, name) {
+      let ref;
+      if(uid in dataObserverRef && name in dataObserverRef[uid]) {
+        ref = dataObserverRef[uid][name];
+        ref.off('child_added', firebaseObserveElementAdd);
+        ref.off('child_changed', firebaseObserveElementUpdate);
+        ref.off('child_removed', firebaseObserveElementRemove);
+        delete dataObserverRef[uid][name];
+      }
+    }
+  }
+  ito.provider.firebase = new FirebaseProvider(self.ito);
+  let provider = ito.provider.firebase;
+
+  /*
+   * Internal functions
+   */
+
+  /*
+   * Firebase Login
+   */
+  function getUser() {
+    return firebase.auth().currentUser;
+  }
+
+  /*
+   * Firebase Database: User Accounts and Status
+   */
   function firebaseEscape(s) {
     return s ? s.replace(/[\W_]/g, c=>{return '%' + c.charCodeAt(0).toString(16);}) : null;
   }
-  firebaseProvider.escape = firebaseEscape;
 
   function firebaseCheckAdministrator() {
     let user = getUser();
@@ -253,10 +602,6 @@
     return passRef.once('value').then(v => {
       passcode = v ? v.val() : null;
     });
-  }
-
-  firebaseProvider.getPasscode = () => {
-    return passcode;
   }
 
   function firebaseSetProfile(createOnly) {
@@ -306,7 +651,7 @@
       let r = data.ref;
       switch(v.type) {
       case 'request':
-        firebaseProvider.onRequest(data.key, {
+        provider.onRequest(data.key, {
           userName: v.userName,
           uid: v.uid,
           email: v.email
@@ -317,7 +662,7 @@
           return firebaseAddFriend(v.uid);
         }).then(() => {
           firebaseSetFriendChangedRef(v.uid);
-          firebaseProvider.onAccept(v.requestKey, {
+          provider.onAccept(v.requestKey, {
             userName: v.userName,
             uid: v.uid,
             email: v.email
@@ -327,7 +672,7 @@
         break;
       case 'reject':
         dropRequest(data.key, usePasscode).then(() => {
-          firebaseProvider.onReject(v.requestKey);
+          provider.onReject(v.requestKey);
         });
         break;
       case 'addfriend':
@@ -411,7 +756,6 @@
       }
     });
   }
-  firebaseProvider.setPasscode = firebaseSetPasscodeRef;
 
   function firebaseResetRequestRef() {
     if(requestRef) {
@@ -440,10 +784,10 @@
       profilesRef[key].on('child_changed', ((k, d) => {
         let arg = {};
         arg[d.key] = d.val();
-        firebaseProvider.onUpdateFriend(key, arg);
+        provider.onUpdateFriend(key, arg);
       }).bind(this, key));
       if(friend)
-        firebaseProvider.onAddFriend(key, friend);
+        provider.onAddFriend(key, friend);
       else
         firebase.database().ref('friends/' + user.uid + '/' + key).remove();
     })
@@ -465,7 +809,7 @@
       if(profilesRef[key]) {
         profilesRef[key].off('child_changed');
         delete profilesRef[key];
-        firebaseProvider.onRemoveFriend(key);
+        provider.onRemoveFriend(key);
       }
     });
   }
@@ -482,50 +826,10 @@
     }
   }
 
-  firebaseProvider.sendRequest = (m, opt) => {
-    return new Promise((resolve, reject) => {
-      let user = getUser();
-      let e = firebaseEscape(m);
-      let ref = firebase.database().ref('requests/' + e).push();
-      firebase.database().ref('requestKeys/' + user.uid + '/' + e).set(ref.key).then(() => {
-        let arg = {
-          type: 'request',
-          email: email,
-          userName: user.displayName,
-          uid: user.uid
-        };
-        if(opt)
-          arg.options = opt;
-        return ref.set(arg);
-      }).then(() => {
-        resolve(ref.key);
-      }, () => {
-        reject(new Error('No user for requested email address or passcode exists.'));
-      });
-    });
-  };
-
-  firebaseProvider.sendRemove = (uid, m) => {
-    return new Promise((resolve, reject) => {
-      let user = getUser();
-      let e = firebaseEscape(m);
-      let ref = firebase.database().ref('requests/' + e).push();
-      firebase.database().ref('friends/' + user.uid + '/' + uid).remove().then(() => {
-        return ref.set({
-          type: 'remove',
-          uid: user.uid
-        });
-      }).then(() => {
-        resolve();
-      })
-    });
-  };
-
   function dropRequest(key, usePasscode) {
     let ref = usePasscode ? passcodesRef : requestRef;
     return ref ? ref.child(key).remove() : Promise.reject(new Error('internal error (firebaseDropRequest)'));
   }
-  firebaseProvider.dropRequest = dropRequest;
 
   function notifyFriendAdded(m) {
     let user = getUser();
@@ -550,49 +854,6 @@
     let user = getUser();
     return firebase.database().ref('friends/' + user.uid + '/' + uid).remove();
   }
-
-  firebaseProvider.acceptRequest = (key, m, uid, usePasscode) => {
-    return new Promise((resolve, reject) => {
-      let user = getUser();
-      let ref = firebase.database().ref('requests/' + firebaseEscape(m)).push();
-      firebaseAddFriend(uid).then(() => {
-        let arg = {
-          type: 'accept',
-          email: email,
-          userName: user.displayName,
-          uid: user.uid,
-          requestKey: key
-        };
-        if(usePasscode) {
-          arg.passcode = passcode;
-          firebaseResetPasscodeRef();
-        }
-        return ref.set(arg);
-      }).then(
-        firebaseFinishRequest(usePasscode ? passcode : firebaseEscape(email), uid)
-      ).then(() => {
-        resolve();
-      });
-    });
-  };
-
-  firebaseProvider.rejectRequest = (key, m, uid, usePasscode) => {
-    return new Promise((resolve, reject) => {
-      let ref = firebase.database().ref('requests/' + firebaseEscape(m)).push();
-      let arg = {
-        type: 'reject',
-        email: email,
-        requestKey: key
-      };
-      if(usePasscode)
-        arg.passcode = passcode;
-      ref.set(arg).then(
-        firebaseFinishRequest(usePasscode ? passcode : firebaseEscape(email), uid)
-      ).then(() => {
-        resolve();
-      });
-    });
-  };
 
   function firebaseSetOnDisconnectRef() {
     let user = getUser();
@@ -638,8 +899,6 @@
   /*
    * Firebase Database: Chat Messages
    */
-  let messagesRef = null;
-
   function firebaseSetMessagesRef() {
     let user = getUser();
     messagesRef = firebase.database().ref('messages/' + user.uid);
@@ -649,7 +908,7 @@
       messagesRef.child(key).remove();
       switch(v.type) {
       case 'message':
-        firebaseProvider.onMessage(v.uid, v.data);
+        provider.onMessage(v.uid, v.data);
         firebase.database().ref('messages/' + v.uid).push().set({
           type: 'ack',
           uid: v.uid,
@@ -657,28 +916,11 @@
         });
         break;
       case 'ack':
-        firebaseProvider.onMessageAck(v.uid, v.messageKey);
+        provider.onMessageAck(v.uid, v.messageKey);
         break;
       }
     });
   }
-
-  firebaseProvider.sendMessage = (uid, msg) => {
-    let user = getUser();
-    if(messagesRef) {
-      let ref = firebase.database().ref('messages/' + uid).push();
-      return ref.set({
-        type: 'message',
-        uid: user.uid,
-        data: msg
-      }).then(() => {
-        return { uid: uid, messageKey: ref.key };
-      });
-    }
-    else {
-      return Promise.reject(new Error('cannot send message: not online'));
-    }
-  };
 
   function firebaseResetMessagesRef() {
     if(messagesRef) {
@@ -690,9 +932,6 @@
   /*
    * Firebase Database: Notifications
    */
-  let notificationsRef = null;
-  let lastNotificationChecked = null;
-
   function firebaseGetLastNotificationChecked() {
     return firebase.database().ref('lastNotificationChecked/' + getUser().uid).once('value').then(data => {
       lastNotificationChecked = data.val();
@@ -722,7 +961,7 @@
       if(data) {
         let v = data.val();
         if(v) {
-          firebaseProvider.onNotification(
+          provider.onNotification(
             Object.keys(v).map(k => { return v[k]; }).sort((a, b) => {
               return a.timestamp < b.timestamp ? -1 : 1;
             })
@@ -752,7 +991,7 @@
             const key = data.key;
             let v = data.val();
             firebaseSetNotificationTimestamp();
-            firebaseProvider.onNotification([v]);
+            provider.onNotification([v]);
           });
       });
   }
@@ -764,50 +1003,32 @@
     }
   }
 
-  firebaseProvider.sendNotification = msg => {
-    return new Promise((resolve, reject) => {
-      let ref = firebase.database().ref('notifications').push();
-      ref.set({
-        data: msg,
-        timestamp: firebase.database.ServerValue.TIMESTAMP
-      }).then(() => {
-        firebaseClearOldNotifications();
-        resolve();
-      }, () => {
-        reject(new Error('the current user is not permitted to send a notification'));
-      });
-    });
-  }
-
   /*
    * Firebase Database: WebRTC Signaling Messages
    */
-  let signalsRef = null;
-
   function firebaseSetSignalsRef() {
     let user = getUser();
     signalsRef = firebase.database().ref('signals/' + user.uid);
     signalsRef.on('child_added', data => {
       const key = data.key;
       let v = data.val();
-      console.log(v);
       signalsRef.child(key).remove();
       switch(v.type) {
       case 'invite':
-        firebaseProvider.onInvite(v);          
+        provider.onInvite(v);          
         break;
       case 'accept':
-        firebaseProvider.onAcceptInvite(v);
+        provider.onAcceptInvite(v);
         break;
       case 'reconnect':
-        firebaseProvider.onReconnect(v);
+        provider.onReconnect(v);
         break;
       case 'reject':
       case 'close':
-        firebaseProvider.onClose(v);
+        provider.onClose(v);
         break;
       case 'signaling':
-        firebaseProvider.onSignaling(v);
+        provider.onSignaling(v);
         break;
       }
     });
@@ -820,199 +1041,27 @@
     }
   }
 
-  firebaseProvider.sendInvite = (uid, opt) => {
-    return new Promise((resolve, reject) => {
-      let user = getUser();
-      let ref = firebase.database().ref('signals/' + uid).push();
-      ref.set({
-        type: 'invite',
-        uid: user.uid,
-        cid: ref.key,
-        audio: opt.audio,
-        video: opt.video,
-        dataChannel: !!opt.dataChannel
-      }).then(() => {
-        ref.onDisconnect().remove();
-        resolve(ref.key);
-      })
-    });
-  };
-
-  firebaseProvider.sendAccept = (uid, cid, opt) => {
-    return new Promise((resolve, reject) => {
-      let user = getUser();
-      let ref = firebase.database().ref('signals/' + uid).push();
-      ref.set({
-        type: 'accept',
-        uid: user.uid,
-        cid: cid,
-        audio: opt.audio,
-        video: opt.video
-      }).then(() => {
-        resolve();
-      })
-    });
-  };
-
-  firebaseProvider.sendReject = (uid, cid, reason) => {
-    return new Promise((resolve, reject) => {
-      let user = getUser();
-      let ref = firebase.database().ref('signals/' + uid).push();
-      ref.set({
-        type: 'reject',
-        uid: user.uid,
-        cid: cid,
-        reason: reason
-      }).then(() => {
-        resolve();
-      })
-    });
-  };
-
-  firebaseProvider.sendReconnect = (uid, cid, opt) => {
-    return new Promise((resolve, reject) => {
-      let user = getUser();
-      let ref = firebase.database().ref('signals/' + uid).push();
-      ref.set({
-        type: 'reconnect',
-        uid: user.uid,
-        cid: cid,
-        audio: opt.audio,
-        video: opt.video,
-        dataChannel: !!opt.dataChannel
-      }).then(() => {
-        resolve();
-      });
-    });
-  };
-
-  firebaseProvider.sendClose = (uid, cid) => {
-    return new Promise((resolve, reject) => {
-      let user = getUser();
-      let ref = firebase.database().ref('signals/' + uid).push();
-      ref.set({
-        type: 'close',
-        uid: user.uid,
-        cid: cid
-      }).then(() => {
-        resolve();
-      });
-    });
-  };
-
-  firebaseProvider.sendSignaling = (uid, cid, type, data) => {
-    return new Promise((resolve, reject) => {
-      let user = getUser();
-      let ref = firebase.database().ref('signals/' + uid).push();
-      ref.set({
-        type: 'signaling',
-        signalingType: type,
-        uid: user.uid,
-        cid: cid,
-        data: JSON.stringify(data)
-      }).then(() => {
-        resolve();
-      });
-    });
-  };
-
   /*
    * Firebase Database: Simple Data Store Sharing
    */
-  let dataObserverRef = {};
-
-  firebaseProvider.openDataStore = (scope, name) => {
-    let user = getUser();
-    let ref = firebase.database().ref(
-      'datastorescopes/' + user.uid + '/' + name);
-    return ref.once('value').then(data => {
-      let val = data.val();
-      return val || ref.set(scope).then(() => { return scope; });
-    });
-  };
-
-  firebaseProvider.removeDataStore = (scope, name) => {
-    let user = getUser();
-    let dataRef = firebase.database().ref(
-      'datastore/' + user.uid + '/' + name);
-    let scopeRef = firebase.database().ref(
-      'datastorescopes/' + user.uid + '/' + name);
-    return dataRef.remove().then(() => {
-      return scopeRef.remove();
-    });
-  };
-
-  firebaseProvider.putDataElement = (scope, name, key, data) => {
-    let user = getUser();
-    let ref = firebase.database().ref(
-      'datastore/' + user.uid + '/' + name + '/' + key);
-    return ref.set(data);
-  };
-
-  firebaseProvider.getDataElement = (scope, name, key) => {
-    let user = getUser();
-    let ref = firebase.database().ref(
-      'datastore/' + user.uid + '/' + name + '/' + key);
-    return ref.once('value').then(data => {
-      return { key: data.key, data: data.val() };
-    });
-  };
-
-  firebaseProvider.getAllDataElements = (scope, name) => {
-    let user = getUser();
-    let ref = firebase.database().ref(
-      'datastore/' + user.uid + '/' + name);
-    return ref.once('value').then(data => {
-      return data.val();
-    });
-  };
-
-  firebaseProvider.removeDataElement = (scope, name, key) => {
-    let user = getUser();
-    let ref = firebase.database().ref(
-      'datastore/' + user.uid + '/' + name + '/' + key);
-    return ref.remove();
-  };
-
-  firebaseProvider.removeAllDataElements = (scope, name) => {
-    let user = getUser();
-    let ref = firebase.database().ref('datastore/' + user.uid + '/' + name);
-    return ref.remove();
-  };
 
   function firebaseObserveElementAdd(data) {
     let uid = data.ref.parent.parent.key;
     let name = data.ref.parent.key;
-    firebaseProvider.onElementAdd(uid, name, data.key, data.val());
+    provider.onElementAdd(uid, name, data.key, data.val());
   }
 
   function firebaseObserveElementUpdate(data) {
     let uid = data.ref.parent.parent.key;
     let name = data.ref.parent.key;
-    firebaseProvider.onElementUpdate(uid, name, data.key, data.val());
+    provider.onElementUpdate(uid, name, data.key, data.val());
   }
 
   function firebaseObserveElementRemove(data) {
     let uid = data.ref.parent.parent.key;
     let name = data.ref.parent.key;
-    firebaseProvider.onElementRemove(uid, name, data.key);
+    provider.onElementRemove(uid, name, data.key);
   }
-
-  firebaseProvider.observeDataStore = (uid, name) => {
-    let ref;
-    if(uid in dataObserverRef && name in dataObserverRef[uid])
-      ref = dataObserverRef[uid][name];
-    else {
-      ref = firebase.database().ref('datastore/' + uid + '/' + name);
-      ref.on('child_added', firebaseObserveElementAdd);
-      ref.on('child_changed', firebaseObserveElementUpdate);
-      ref.on('child_removed', firebaseObserveElementRemove);
-      if(!(uid in dataObserverRef))
-        dataObserverRef[uid] = {};
-      dataObserverRef[uid][name] = ref;
-    }
-    return Promise.resolve({ uid: uid, name: name });
-  };
 
   if(!isBrowser)
     module.exports = ito;
