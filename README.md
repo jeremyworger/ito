@@ -64,7 +64,9 @@ used in `ito.init()`.
 2. Configure social network settings (if needed).
     * For detailed information, please refer to
     http://docs.kii.com/en/guides/cloudsdk/javascript/managing-users/social-network-integration/.
-3. Create a bucket named `ito` in the application scope.
+3. Create a bucket named `ito` in the app's application scope, then create a object
+in the bucket, copy and paste `etc/kii-objects.json` inside the
+"Objects Attribute" window, and save it.
 4. Confirm your APP ID and APP KEY.
     * For detailed information, please refer to
     http://docs.kii.com/en/guides/cloudsdk/javascript/quickstart/create-app/#checking-appid-and-appkey.
