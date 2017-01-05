@@ -52,8 +52,8 @@
 
   let dataObserverRef = {};
 
-  if(!ito.provider)
-    ito.provider = {};
+  if(!self.ito.provider)
+    self.ito.provider = {};
 
   class FirebaseProvider extends ItoProvider {
     constructor(parent) {
@@ -121,7 +121,7 @@
     /*
      * Firebase Login
      */
-    load() {
+    load(url) {
       // Initialize Firebase client
       if(!self.firebase) {
         // Browser
@@ -129,9 +129,11 @@
           let h = document.querySelector('head');
           return new Promise((resolve, reject) => {
             let s = document.createElement('script');
-            s.src = 'https://www.gstatic.com/firebasejs/3.6.4/firebase.js';
+            s.src = url || 'https://www.gstatic.com/firebasejs/3.6.4/firebase.js';
             s.addEventListener('load', () => { resolve(); });
-            s.addEventListener('error', () => { reject(); });
+            s.addEventListener('error', () => {
+              reject(new Error('cannot load Firebase SDK'));
+            });
             h.appendChild(s);
           });
         }
@@ -565,8 +567,8 @@
       }
     }
   }
-  ito.provider.firebase = new FirebaseProvider(self.ito);
-  let provider = ito.provider.firebase;
+  self.ito.provider.firebase = new FirebaseProvider(self.ito);
+  let provider = self.ito.provider.firebase;
 
   /*
    * Internal functions
@@ -1064,5 +1066,5 @@
   }
 
   if(!isBrowser)
-    module.exports = ito;
+    module.exports = self.ito;
 })(typeof window === 'object' ? window : global, typeof window === 'object');

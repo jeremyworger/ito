@@ -434,7 +434,7 @@
     /*
      * Client: Login
      */
-    init(p, arg) {
+    init(p, arg, url) {
       return new Promise((resolve, reject) => {
         if (state !== 'uninitialized')
           resolve();
@@ -442,7 +442,7 @@
           reject(new Error('Incorrect Provider'));
         else {
           provider = p;
-          p.load().then(() => {
+          p.load(url).then(() => {
             return p.init(arg);
           }).then(b => {
             provider.onOnline(b);
@@ -1122,7 +1122,7 @@
   /*
    * Client Properties
    */
-  Object.defineProperties(ito, {
+  Object.defineProperties(self.ito, {
     state: { get: () => { return state; } },
     profile: { get: () => { return profile; } },
     passcode: { get: () => { return provider.getPasscode(); } },
@@ -1133,7 +1133,7 @@
   });
 
   if (!isBrowser) {
-    ito.ItoProvider = ItoProvider;
-    module.exports = ito;
+    self.ito.ItoProvider = ItoProvider;
+    module.exports = self.ito;
   }
 })(typeof window === 'object' ? window : global, typeof window === 'object');

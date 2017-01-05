@@ -10,11 +10,40 @@ const config = {
   databaseURL: "(see your Firebase setup)"
 };
 
-ito.init(provider, config).then(user => {
+ito.init(provider, config, '(optional: SDK URL').then(user => {
   // Write your codes to be done when initialized
   console.log(user.uid);
 });
 ```
+
+## Kii Cloud
+
+```js
+let provider = ito.provider.kii;
+const config = {
+  appId: "(your APP ID)",
+  appKey: "(your APP KEY)",
+  serverLocation: /* see below */,
+  development: /* true if under development environment, otherwise false */
+};
+
+ito.init(provider, config, '(optional: SDK URL').then(user => {
+  // Write your codes to be done when initialized
+  console.log(user.uid);
+});
+```
+
+`serverLocation` must be one of the following, corresponding to
+the server location which you have chosen:
+
+* ito.provider.kii.US
+* ito.provider.kii.EU
+* ito.provider.kii.CN
+* ito.provider.kii.CN3
+* ito.provider.kii.SG
+* ito.provider.kii.JP
+
+Note: *The default value of SDK URL is `KiiSDK.min.js` in the same directory.*
 
 # Account and Authentication
 

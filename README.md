@@ -36,13 +36,14 @@ Node.js with the following features:
 * WebRTC compatibility (when using WebRTC peer-to-peer communication)
 * A developer account for one of the following backend service(s):
   * [Firebase](https://firebase.google.com)
+  * [Kii Cloud](https://www.kii.com)
 
 ## Setup before using ito
 
 ### Firebase
 
 1. Create your Firebase project at https://console.firebase.google.com.
-2. Configure *Authentication -> Sign-in method*.
+2. Configure *Authentication -> Sign-in method* (if needed).
     * Select *Sign-in providers* as you need.
     For Facebook, *App ID*, *App secret* and *OAuth redirect URI* must be
     configured as well.
@@ -53,18 +54,35 @@ Node.js with the following features:
 the values of `apiKey`, `authDomain` and `databaseURL`. These values are
 used in `ito.init()`.
 
+### Kii Cloud
+
+1. Create your app at https://developer.kii.com.
+    * Choose HTML5 as your application's platform.
+    * Choose a server location appropriate for you.
+    * For detailed information, please refer to 
+    http://docs.kii.com/en/guides/cloudsdk/javascript/quickstart/create-app/.
+2. Configure social network settings (if needed).
+    * For detailed information, please refer to
+    http://docs.kii.com/en/guides/cloudsdk/javascript/managing-users/social-network-integration/.
+3. Create a bucket named `ito` in the application scope.
+4. Confirm your APP ID and APP KEY.
+    * For detailed information, please refer to
+    http://docs.kii.com/en/guides/cloudsdk/javascript/quickstart/create-app/#checking-appid-and-appkey.
+
 # How to run
 
 ## Loading the library on your application
 
 Note: You can modify paths of scripts according to your environment.
 
-### Browsers
+### Firebase
+
+#### Browsers
 ```html
 <script src="src/ito.js"></script>
 <script src="src/ito-firebase.js"></script>
 ```
-### Node.js
+#### Node.js
 ```js
 let ito = require('./src/ito-firebase.js');
 ```
@@ -72,6 +90,24 @@ This library requires the `firebase` module:
 
 ```bash
 $ npm install firebase --save
+```
+
+### Kii Cloud
+
+#### Browsers
+```html
+<script src="src/ito.js"></script>
+<script src="src/ito-kii.js"></script>
+```
+#### Node.js
+```js
+let ito = require('./src/ito-kii.js');
+```
+This library requires the `kii-cloud-sdk` and `mqtt` modules:
+
+```bash
+$ npm install kii-cloud-sdk --save
+$ npm install mqtt --save
 ```
 
 For detailed description of API, please refer to [the API documentation](API.md).
