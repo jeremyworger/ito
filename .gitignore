@@ -5,3 +5,4 @@ node_modules
 work
 samples/config.json
 samples/localtest.html
+external/
