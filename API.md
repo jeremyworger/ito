@@ -24,7 +24,10 @@ const config = {
   appId: "(your APP ID)",
   appKey: "(your APP KEY)",
   serverLocation: /* see below */,
-  development: /* true if under development environment, otherwise false */
+  development: /* true if under development environment, otherwise false */,
+  appIds: {
+    facebook: /* Facebook App ID (if your app uses Facebook Login) */
+  }
 };
 
 ito.init(provider, config, '(optional: SDK URL').then(user => {
@@ -57,10 +60,10 @@ ito.signIn('(sign-in type)').then(user => {
 ```
 *sign-in type* must be one of the following:
 
-* `anonymous`: an anonymous account, valid until signed out
-* `google`: (browsers only) a Google account
-* `facebook`: (browsers only) a Facebook account
-* `email`: an account with e-mail and password (see below)
+* `anonymous` [Firebase, Kii Cloud]: an anonymous account, valid until signed out
+* `google` [Firebase]: (browsers only) a Google account
+* `facebook` [Firebase]: (browsers only) a Facebook account
+* `email` [Firebase, Kii Cloud]: an account with e-mail and password (see below)
 
 Note: *Currently, Node.js cannot keep sign-in status of `anonymous`
 account persistently when the process finishes.*

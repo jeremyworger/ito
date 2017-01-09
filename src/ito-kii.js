@@ -29,11 +29,13 @@
   /*
    * Global variables
    */
-  const KII_LOGIN_TOKEN = 'ito.provider.kii.loginToken';
+  const KII_LOGIN_TOKEN_ANONYMOUS = 'ito.provider.kii.loginToken.anonymous';
 
   let development = true;
   let email = null;
   let userName = null;
+
+  let isAdmin = false;
 
   if(!self.ito.provider)
     self.ito.provider = {};
@@ -43,11 +45,12 @@
       super(parent);
       this.signIn = {
         anonymous: () => {
-          let token = localStorage.getItem(KII_LOGIN_TOKEN);
+          let token = localStorage.getItem(KII_LOGIN_TOKEN_ANONYMOUS);
           return token ?
             KiiUser.authenticateWithToken(token).then(kiiSetProfile) :
-            KiiUser.registerAsPseudoUser().then(user => {
-              localStorage.setItem(KII_LOGIN_TOKEN, user.getAccessToken());
+            KiiUser.registerAsPseudoUser().then(() => {
+              let user = getUser();
+              localStorage.setItem(KII_LOGIN_TOKEN_ANONYMOUS, user.getAccessToken());
               return kiiSetProfile();
             });
         }
@@ -97,13 +100,13 @@
       return new Promise((resolve, reject) => {
         development = !!arg && !!arg.development;
         Kii.initializeWithSite(arg.appId, arg.appKey, KiiSite[arg.serverLocation]);
-        let token = localStorage.getItem(KII_LOGIN_TOKEN);
+        let token = localStorage.getItem(KII_LOGIN_TOKEN_ANONYMOUS);
         if(token)
           KiiUser.authenticateWithToken(token)
             .then(kiiGetProfile)
-            .then(prof => { resolve(prof); });
+            .then(prof => { resolve(true); });
         else
-          resolve();
+          resolve(false);
       });
     }
 
@@ -120,12 +123,13 @@
     signOut() {
       return new Promise((resolve, reject) => {
         let user = getUser();
+        this.onOnline(false);
         if(user && user.isPseudoUser()) {
           return user.delete()
             .then(() => {
               email = null;
               userName = null;
-              localStorage.removeItem(KII_LOGIN_TOKEN);
+              localStorage.removeItem(KII_LOGIN_TOKEN_ANONYMOUS);
             }).then(KiiUser.logOut);
         }
         else {
@@ -140,9 +144,9 @@
      */
     get US()  { return 'US'; }
     get EU()  { return 'EU'; }
-    get CN()  { return 'CN' }
-    get CN3() { return 'CN3' }
-    get SG()  { return 'SG' }
+    get CN()  { return 'CN'; }
+    get CN3() { return 'CN3'; }
+    get SG()  { return 'SG'; }
     get JP()  { return 'JP'; }
   }
   self.ito.provider.kii = new KiiProvider(self.ito);
@@ -171,7 +175,7 @@
     let password = kiiGenerateRandomString(24);
     console.log(password);
     let user = KiiUser.userWithUsername(name, password);
-    return user.register().then(kiiSetProfile, kiiCreateAnonymousUser);
+    return user.register().catch(kiiCreateAnonymousUser);
   }
 
   /*
