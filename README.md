@@ -77,39 +77,30 @@ in the bucket, copy and paste `etc/kii-objects.json` inside the
 
 Note: You can modify paths of scripts according to your environment.
 
-### Firebase
+### Browsers
 
-#### Browsers
+#### Firebase
+
 ```html
 <script src="src/ito.js"></script>
 <script src="src/ito-firebase.js"></script>
 ```
-#### Node.js
-```js
-let ito = require('./src/ito-firebase.js');
-```
-This library requires the `firebase` module:
 
-```bash
-$ npm install firebase --save
-```
+#### Kii Cloud
 
-### Kii Cloud
-
-#### Browsers
 ```html
 <script src="src/ito.js"></script>
 <script src="src/ito-kii.js"></script>
 ```
-#### Node.js
-```js
-let ito = require('./src/ito-kii.js');
-```
-This library requires the `kii-cloud-sdk` and `mqtt` modules:
+
+### Node.js
 
 ```bash
-$ npm install kii-cloud-sdk --save
-$ npm install mqtt --save
+$ npm install ito --save
+```
+
+```js
+let ito = require('ito');
 ```
 
 For detailed description of API, please refer to [the API documentation](API.md).

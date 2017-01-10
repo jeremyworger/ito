@@ -1,0 +1,9 @@
+.gitignore
+.DS_Store
+.vscode/
+node_modules
+work
+samples/config.json
+samples/localtest.html
+samples/KiiSDK.min.js
+external/

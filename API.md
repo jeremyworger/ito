@@ -24,10 +24,7 @@ const config = {
   appId: "(your APP ID)",
   appKey: "(your APP KEY)",
   serverLocation: /* see below */,
-  development: /* true if under development environment, otherwise false */,
-  appIds: {
-    facebook: /* Facebook App ID (if your app uses Facebook Login) */
-  }
+  development: /* true if under development environment, otherwise false */
 };
 
 ito.init(provider, config, '(optional: SDK URL').then(user => {

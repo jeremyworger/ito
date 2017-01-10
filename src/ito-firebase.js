@@ -18,7 +18,6 @@
 
 ((self, isBrowser) => {
   if(!isBrowser) {
-    self.ito = require('./ito.js');
     self.ItoProvider = self.ito.ItoProvider;
   }
 
@@ -32,6 +31,7 @@
   let signin = null;
   let credential = null;
   let initResolve = null;
+  let isOnline = false;
   let email = null;
   let userName = null;
 
@@ -61,6 +61,7 @@
       this.signIn = {
         anonymous: () => {
           return firebase.auth().signInAnonymously().then(() => {
+            isOnline = true;
             return firebaseSetProfile();
           });
         },
@@ -76,6 +77,7 @@
                 return response.json();
               }).then(json => {
                 email = json.email;
+                isOnline = true;
                 return firebaseSetProfile();
               }).then(p => {
                 resolve(p);
@@ -96,6 +98,7 @@
                 return response.json();
               }).then(json => {
                 email = json.email;
+                isOnline = true;
                 return firebaseSetProfile();
               }).then(p => {
                 resolve(p);
@@ -109,6 +112,7 @@
           return new Promise((resolve, reject) => {
             firebase.auth().signInWithEmailAndPassword(id, pass).then(user => {
               email = user.email;
+              isOnline = true;
               resolve(firebaseSetProfile());
             });
           }, error => {
@@ -207,17 +211,30 @@
     }
 
     createUser(id, pass) {
-      return new Promise((resolve, reject) => {
-        firebase.auth().createUserWithEmailAndPassword(id, pass).then(user => {
-          return firebaseSetProfile(true);
-        }).then(p => {
-          this.signOut().then(() => {
-            resolve(p);
+      let user = getUser();
+      return user ?
+        Promise.reject(new Error('already signed in')) :
+        new Promise((resolve, reject) => {
+          firebase.auth().createUserWithEmailAndPassword(id, pass).then(user => {
+            email = user.email || user.uid;
+            return firebaseSetProfile(true);
+          }).then(p => {
+            this.signOut().then(() => {
+              resolve(p);
+            });
           });
         });
-      }, error => {
-        reject(error);
-      });
+    }
+
+    updateUserName(name) {
+      let user = getUser();
+      return user ? user.updateProfile({
+        displayName: name
+      }).then(() => {
+        let user = getUser();
+        userName = user.displayName || email;
+        return firebaseSetProfile(true);
+      }) : Promise.reject(new Error('not signed in'));
     }
 
     signOut() {
@@ -614,7 +631,7 @@
       userName: userName,
       email: email,
       emailEscaped: firebaseEscape(email),
-      status: createOnly ? 'offline' : 'online'
+      status: isOnline ? 'online' : 'offline'
     };
     let p = firebase.database().ref('users/' + user.uid).set(prof)
       .then(firebase.database().ref('emails/' + firebaseEscape(email)).set(user.uid))
@@ -627,8 +644,10 @@
   function firebaseGetProfile() {
     return new Promise((resolve, reject) => {
       let user = getUser();
+      isOnline = true;
       firebase.database().ref('users/' + user.uid).once('value', snapshot => {
         email = snapshot.val().email;
+        userName = user.displayName || email;
         firebase.database().ref('users/' + user.uid + '/status').set('online')
           .then(firebase.database().ref('emails/' + firebaseEscape(email)).set(user.uid))
           .then(firebaseCheckAdministrator)
@@ -884,6 +903,7 @@
   }
 
   function firebaseSetOffline() {
+    isOnline = false;
     return firebaseResetOnDisconnectRef().then(() => {
       firebaseResetRequestRef();
       firebaseResetFriendsRef();

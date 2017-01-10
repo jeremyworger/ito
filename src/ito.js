@@ -485,6 +485,10 @@
       })
     }
 
+    updateUserName(name) {
+      return provider.updateUserName(name);
+    }
+
     signOut() {
       return !profile.uid ? Promise.resolve() : new Promise((resolve, reject) => {
         Object.keys(profile.isAnonymous ? friends : {}).reduce((a, b) => {

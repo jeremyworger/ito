@@ -18,7 +18,6 @@
 
 ((self, isBrowser) => {
   if(!isBrowser) {
-    self.ito = require('./ito.js');
     self.ItoProvider = self.ito.ItoProvider;
   }
 
@@ -29,13 +28,24 @@
   /*
    * Global variables
    */
-  const KII_LOGIN_TOKEN_ANONYMOUS = 'ito.provider.kii.loginToken.anonymous';
+  const KII_LOGIN_TYPE  = 'ito.provider.kii.login.type';
+  const KII_LOGIN_TOKEN = {
+    anonymous: 'ito.provider.kii.loginToken.anonymous',
+    email:     'ito.provider.kii.loginToken.email'
+  };
+
+  /** @type {KiiGroup} */
+  let group = null;
+  /** @type {KiiBucket} */
+  let groupBucket = null;
 
   let development = true;
+  let isOnline = false;
   let email = null;
   let userName = null;
 
   let isAdmin = false;
+  let currentUser = null;
 
   if(!self.ito.provider)
     self.ito.provider = {};
@@ -45,14 +55,25 @@
       super(parent);
       this.signIn = {
         anonymous: () => {
-          let token = localStorage.getItem(KII_LOGIN_TOKEN_ANONYMOUS);
-          return token ?
-            KiiUser.authenticateWithToken(token).then(kiiSetProfile) :
-            KiiUser.registerAsPseudoUser().then(() => {
-              let user = getUser();
-              localStorage.setItem(KII_LOGIN_TOKEN_ANONYMOUS, user.getAccessToken());
-              return kiiSetProfile();
-            });
+          return KiiUser.registerAsPseudoUser().then(() => {
+            currentUser = KiiUser.getCurrentUser();
+            let user = getUser();
+            localStorage.setItem(KII_LOGIN_TYPE, 'anonymous');
+            localStorage.setItem(KII_LOGIN_TOKEN['anonymous'], user.getAccessToken());
+            isOnline = true;
+            return kiiSetProfile();
+          });
+        },
+        email: (id, pass) => {
+          return KiiUser.authenticate(id, pass).then(() => {
+            currentUser = KiiUser.getCurrentUser();
+            let user = getUser();
+            localStorage.setItem(KII_LOGIN_TYPE, 'email');
+            localStorage.setItem(KII_LOGIN_TOKEN['email'], user.getAccessToken());
+            email = user.getEmailAddress() || user.getID();
+            isOnline = true;
+            return kiiSetProfile();
+          });
         }
       };
     }
@@ -100,7 +121,8 @@
       return new Promise((resolve, reject) => {
         development = !!arg && !!arg.development;
         Kii.initializeWithSite(arg.appId, arg.appKey, KiiSite[arg.serverLocation]);
-        let token = localStorage.getItem(KII_LOGIN_TOKEN_ANONYMOUS);
+        let type = localStorage.getItem(KII_LOGIN_TYPE);
+        let token = localStorage.getItem(KII_LOGIN_TOKEN[type]);
         if(token)
           KiiUser.authenticateWithToken(token)
             .then(kiiGetProfile)
@@ -113,23 +135,59 @@
     getUser() {
       let user = getUser();
       return user ? {
-        userName: user.getUsername(),
+        userName: user.getDisplayName(),
         email: email,
         isAnonymous: user.isPseudoUser(),
         uid: user.getID()
       } : null;
     }
 
+    createUser(id, pass, name) {
+      let user = getUser();
+      return user ?
+        Promise.reject(new Error('already signed in')) :
+        KiiUser.userWithEmailAddress(id, pass).register().then(() => {
+          return KiiUser.authenticate(id, pass);
+        }).then(user => {
+          currentUser = user;
+          email = user.getEmailAddress() || user.getID();
+          return kiiSetProfile(true);
+        }).then(p => {
+          this.signOut().then(() => {
+            return p;
+          });
+        });
+    }
+
+    updateUserName(name) {
+      let user = getUser();
+      return user ? user.update(null, null, {
+        displayName: name
+      }).then(() => {
+        return getUser().refresh();
+      }).then(user => {
+        currentUser = user;
+        userName = user.getDisplayName() || email;
+        return null;
+      }) : Promise.reject(new Error('not signed in'));
+    }
+
     signOut() {
       return new Promise((resolve, reject) => {
+        isOnline = false;
         let user = getUser();
+        currentUser = null;
         this.onOnline(false);
+        let type = localStorage.getItem(KII_LOGIN_TYPE);
+        if(type) {
+          localStorage.removeItem(KII_LOGIN_TYPE);
+          localStorage.removeItem(KII_LOGIN_TOKEN[type]);
+        }
         if(user && user.isPseudoUser()) {
           return user.delete()
             .then(() => {
               email = null;
               userName = null;
-              localStorage.removeItem(KII_LOGIN_TOKEN_ANONYMOUS);
             }).then(KiiUser.logOut);
         }
         else {
@@ -157,10 +215,14 @@
    */
 
   /*
-   * Kii Cloud Login
+   * Kii Cloud: Login
+   */
+
+  /**
+   * @return {KiiUser}
    */
   function getUser() {
-    return KiiUser ? KiiUser.getCurrentUser() : null;
+    return currentUser;
   }
 
   function kiiGenerateRandomString(l) {
@@ -173,40 +235,40 @@
   function kiiCreateAnonymousUser() {
     let name = 'user_' + kiiGenerateRandomString(16);
     let password = kiiGenerateRandomString(24);
-    console.log(password);
     let user = KiiUser.userWithUsername(name, password);
     return user.register().catch(kiiCreateAnonymousUser);
   }
 
   /*
-   * Firebase Database: User Accounts and Status
+   * Kii Cloud: User Accounts and Status
    */
-
   function kiiSetProfile(createOnly) {
     let user = getUser();
     email = email || user.getID();
-    userName = user.getUsername() || email;
+    userName = user.getDisplayName() || email;
     let prof = {
       userName: userName,
       email: email,
-      status: createOnly ? 'offline' : 'online'
+      status: isOnline ? 'online' : 'offline'
     };
-    return prof;
     /*
     let p = firebase.database().ref('users/' + user.uid).set(prof)
       .then(firebase.database().ref('emails/' + firebaseEscape(email)).set(user.uid))
       .then(firebaseCheckAdministrator);
+      */
+    let p = kiiInitGroup();
     if(!createOnly)
-      firebaseOnOnline();
+      kiiOnOnline();
     return p.then(() => { return prof; });
-    */
   }
 
   function kiiGetProfile() {
     return new Promise((resolve, reject) => {
+      isOnline = true;
+      currentUser = KiiUser.getCurrentUser();
       let user = getUser();
       email = email || user.getID();
-      userName = user.getUsername() || email;
+      userName = user.getDisplayName() || email;
       let prof = {
         userName: userName,
         email: email,
@@ -214,6 +276,32 @@
       };
       resolve(prof);
     });
+  }
+
+  function kiiCreateGroup() {
+    let g = KiiGroup.groupWithName('itoprofile');
+    return g.save();
+  }
+
+  function kiiInitGroup() {
+    let user = getUser();
+    return user.ownerOfGroups().then(params => {
+      let list = params[1];
+      return list.length === 0 ? kiiCreateGroup() : list[0];
+    });
+  }
+
+  function kiiInitBucket() {
+    groupBucket = group.bucketWithName('itoprofile');
+    let query = KiiQuery.queryWithClause();
+    
+  }
+
+  function kiiOnOnline() {
+  }
+
+  function kiiSetOffline() {
+
   }
 
   if(!isBrowser)
