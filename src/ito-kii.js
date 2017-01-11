@@ -37,14 +37,24 @@
   /** @type {KiiGroup} */
   let group = null;
   /** @type {KiiBucket} */
-  let groupBucket = null;
+  let itoBucket = null;
+  /** @type {KiiObject} */
+  let profileRef = null;
+  /** @type {Array<KiiGroup>} */
+  let friendGroups = [];
 
+  let mqttClient = null;
+
+  /** @type {boolean} */
   let development = true;
+  /** @type {boolean} */
   let isOnline = false;
   let email = null;
   let userName = null;
 
+  /** @type {boolean} */
   let isAdmin = false;
+  /** @type {KiiUser} */
   let currentUser = null;
 
   if(!self.ito.provider)
@@ -132,6 +142,7 @@
       });
     }
 
+    /** @return {KiiUser} */
     getUser() {
       let user = getUser();
       return user ? {
@@ -175,25 +186,32 @@
     signOut() {
       return new Promise((resolve, reject) => {
         isOnline = false;
-        let user = getUser();
-        currentUser = null;
-        this.onOnline(false);
-        let type = localStorage.getItem(KII_LOGIN_TYPE);
-        if(type) {
-          localStorage.removeItem(KII_LOGIN_TYPE);
-          localStorage.removeItem(KII_LOGIN_TOKEN[type]);
-        }
-        if(user && user.isPseudoUser()) {
-          return user.delete()
-            .then(() => {
+        let saved = profileRef;
+        kiiSetOffline().then(() => {
+          let user = getUser();
+          this.onOnline(false);
+          let type = localStorage.getItem(KII_LOGIN_TYPE);
+          if(type) {
+            localStorage.removeItem(KII_LOGIN_TYPE);
+            localStorage.removeItem(KII_LOGIN_TOKEN[type]);
+          }
+          if(user && user.isPseudoUser()) {
+            profileRef = saved;
+            return kiiDeleteProfile().then(() => {
+              profileRef = null;
+              return user.delete();
+            }).then(() => {
+              currentUser = null;
               email = null;
               userName = null;
             }).then(KiiUser.logOut);
-        }
-        else {
-          KiiUser.logOut();
-          resolve();
-        }
+          }
+          else {
+            KiiUser.logOut();
+            currentUser = null;
+            resolve();
+          }
+        });
       });
     }
 
@@ -218,9 +236,7 @@
    * Kii Cloud: Login
    */
 
-  /**
-   * @return {KiiUser}
-   */
+  /** @return {KiiUser} */
   function getUser() {
     return currentUser;
   }
@@ -242,6 +258,10 @@
   /*
    * Kii Cloud: User Accounts and Status
    */
+  function kiiUpdateProfile() {
+
+  }
+
   function kiiSetProfile(createOnly) {
     let user = getUser();
     email = email || user.getID();
@@ -256,10 +276,15 @@
       .then(firebase.database().ref('emails/' + firebaseEscape(email)).set(user.uid))
       .then(firebaseCheckAdministrator);
       */
-    let p = kiiInitGroup();
-    if(!createOnly)
-      kiiOnOnline();
-    return p.then(() => { return prof; });
+    return kiiOnOnline()
+            .then(() => {
+              Object.keys(prof).forEach(i => {
+                profileRef.set(i, prof[i]);
+              });
+              return profileRef.save();
+            }).then(() => {
+              return prof;
+            });
   }
 
   function kiiGetProfile() {
@@ -267,41 +292,190 @@
       isOnline = true;
       currentUser = KiiUser.getCurrentUser();
       let user = getUser();
-      email = email || user.getID();
+      email = user.getEmailAddress() || user.getID();
       userName = user.getDisplayName() || email;
       let prof = {
         userName: userName,
         email: email,
         status: 'online'
       };
-      resolve(prof);
+      kiiOnOnline().then(() => {
+        Object.keys(prof).forEach(i => {
+          profileRef.set(i, prof[i]);
+        });
+        return profileRef.save();
+      }).then(() => {
+        resolve(prof);
+      })
     });
   }
 
   function kiiCreateGroup() {
-    let g = KiiGroup.groupWithName('itoprofile');
+    let g = KiiGroup.groupWithName('itouser');
     return g.save();
   }
 
-  function kiiInitGroup() {
+  function kiiSearchGroup() {
     let user = getUser();
     return user.ownerOfGroups().then(params => {
       let list = params[1];
-      return list.length === 0 ? kiiCreateGroup() : list[0];
+      return list.length === 0 ?
+        kiiCreateGroup() :
+        list.reduce((a, b) => {
+          if(a)
+            return a;
+          else {
+            if (b.getName() === 'itouser')
+              return b;
+            else {
+              b.delete();
+              return null;
+            }
+          }
+        }, null);
     });
   }
 
-  function kiiInitBucket() {
-    groupBucket = group.bucketWithName('itoprofile');
-    let query = KiiQuery.queryWithClause();
-    
+  function kiiInitGroup() {
+    return kiiSearchGroup().then(g => {
+      group = g;
+    });
   }
 
+  function kiiAddACLEntry(object, scope, action, grant) {
+    let acl = object.objectACL();
+    let entry = KiiACLEntry.entryWithSubject(scope, action);
+    entry.setGrant(grant);
+    acl.putACLEntry(entry);
+    return acl.save();
+  }
+
+  function kiiInitProfileRef() {
+    profileRef = itoBucket.createObject('profile');
+    profileRef.set('type', 'profile');
+    return profileRef.save().then(() => {
+      return kiiAddACLEntry(
+        profileRef,
+        new KiiAnonymousUser(),
+        KiiACLAction.KiiACLObjectActionRead,
+        false );
+    }).then(() => {
+      return kiiAddACLEntry(
+        profileRef,
+        new KiiAnyAuthenticatedUser(),
+        KiiACLAction.KiiACLObjectActionRead,
+        false );
+    }).then(() => {
+      return kiiAddACLEntry(
+        profileRef,
+        new KiiAnyAuthenticatedUser(),
+        KiiACLAction.KiiACLObjectActionWrite,
+        false );
+    }).then(() => {
+      return kiiAddACLEntry(
+        profileRef,
+        group,
+        KiiACLAction.KiiACLObjectActionRead,
+        true );
+    });
+  }
+
+  function kiiInitMqttClient() {
+    let user = getUser();
+    let response, endpoint;
+    return user.pushInstallation().installMqtt(development).then(r => {
+      response = r;
+      return new Promise(resolve => {
+        setTimeout(() => {
+          user.pushInstallation().getMqttEndpoint(response.installationID).then(e => {
+            resolve(e);
+          });
+        }, 200);
+      });
+    }).then(e => {
+      endpoint = e;
+      let ws = (location.protocol === 'http:' ? 'ws://' : 'wss://')
+         + endpoint.host + ':'
+         + (location.protocol === 'http:' ? endpoint.portWS : endpoint.portWSS)
+         + '/mqtt';
+      mqttClient = mqtt.connect(ws, {
+        username: endpoint.username,
+        password: endpoint.password,
+        clientId: endpoint.mqttTopic
+      });
+      mqttClient.on('connect', () => {
+        mqttClient.subscribe(endpoint.mqttTopic);
+      });
+      mqttClient.on('message', (topic, message, packet) => {
+        let body = JSON.parse(message.toString());
+        console.log(body);
+        if(body.objectID) {
+          let object = KiiObject.objectWithURI(body.sourceURI);
+          object.refresh().then(obj => {
+            let t = {};
+            obj.getKeys().forEach(i => {
+              t[i] = obj.get(i);
+            });
+            console.log(t);
+          });
+        }
+      });
+    });
+  }  
+
   function kiiOnOnline() {
+    itoBucket = Kii.bucketWithName('ito');
+    let user = getUser();
+    let query = KiiQuery.queryWithClause(KiiClause.equals('_owner', user.getID()));
+    return kiiInitMqttClient().then(kiiInitGroup).then(() => {
+      return itoBucket.executeQuery(query);
+    }).then(params => {
+      params[1].forEach(object => {
+        switch(object.get('type')) {
+        case 'profile':
+           profileRef = object;
+          break;
+        }
+      });
+    }).then(() => {
+      if(!profileRef)
+        return kiiInitProfileRef();
+    }).catch(e=>{console.error(e);});
   }
 
   function kiiSetOffline() {
+    if(mqttClient) {
+      mqttClient.end();
+      mqttClient = null;
+    }
+    if(profileRef) {
+      profileRef.set('status', 'offline');
+      return profileRef.save().then(() => {
+        group = null;
+        itoBucket = null;
+        profileRef = null;
+      });
+    }
+    else
+      return Promise.resolve();
+  }
 
+  function kiiDeleteProfile() {
+    let user = getUser();
+    if(user) {
+      return user.ownerOfGroups().then(params => {
+        return params[1].map(g => {
+          return g.delete;
+        }).reduce((a, b) => {
+          return a.then(b);
+        }, Promise.resolve());
+      }).then(() => {
+        if(profileRef)
+          return profileRef.delete();
+      });
+    }
+    else
+      return Promise.resolve();
   }
 
   if(!isBrowser)

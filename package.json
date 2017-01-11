@@ -5,7 +5,7 @@
   "main": "index.js",
   "dependencies": {
     "firebase": "^3.6.4",
-    "kii-cloud-sdk": "^2.4.8",
+    "kii-cloud-sdk": "^2.4.9",
     "mqtt": "^2.2.0"
   },
   "devDependencies": {},
