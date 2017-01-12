@@ -26,6 +26,11 @@
       self.MediaStream ||
       self.webkitMediaStream;
   }
+  else {
+    // node-localstorage
+    let LocalStorage = require('node-localstorage').LocalStorage;
+    self.localStorage = new LocalStorage('./localStorage');
+  }
 
   /*
    * Global variables
@@ -1138,6 +1143,9 @@
 
   if (!isBrowser) {
     self.ito.ItoProvider = ItoProvider;
-    module.exports = self.ito;
+    module.exports = {
+      ito: self.ito,
+      localStorage: self.localStorage
+    };
   }
 })(typeof window === 'object' ? window : global, typeof window === 'object');

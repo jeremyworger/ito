@@ -16,8 +16,11 @@
 
 'use strict';
 
-let ito = require('./src/ito.js');
+require('./src/ito.js');
 require('./src/ito-firebase.js');
 require('./src/ito-kii.js');
 
-module.exports = ito;
+module.exports = {
+  ito: global.ito,
+  localStorage: global.localStorage
+};

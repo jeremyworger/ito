@@ -62,9 +62,6 @@ ito.signIn('(sign-in type)').then(user => {
 * `facebook` [Firebase]: (browsers only) a Facebook account
 * `email` [Firebase, Kii Cloud]: an account with e-mail and password (see below)
 
-Note: *Currently, Node.js cannot keep sign-in status of `anonymous`
-account persistently when the process finishes.*
-
 ### Create an account with E-mail and Password (Firebase)
 ```js
 ito.provider.firebase.createUser('(e-mail address)', '(password)').then(user => {
