@@ -42,7 +42,7 @@ Node.js with the following features:
 
 ### Firebase
 
-1. Create your Firebase project at https://console.firebase.google.com.
+1. Create your Firebase project at [Firebase Console](https://console.firebase.google.com).
 2. Configure *Authentication -> Sign-in method* (if needed).
     * Select *Sign-in providers* as you need.
     For Facebook, *App ID*, *App secret* and *OAuth redirect URI* must be
@@ -51,12 +51,12 @@ Node.js with the following features:
     * Note: GitHub and Twitter are not supported yet.
 3. Copy and paste `etc/firebase-rules.json` into *Database -> Rules*.
 4. Confirm the snippet from *Authentication -> Web setup*, and note down
-the values of `apiKey`, `authDomain` and `databaseURL`. These values are
-used in `ito.init()`.
+    the values of `apiKey`, `authDomain` and `databaseURL`. These values are
+    used in `ito.init()`.
 
 ### Kii Cloud
 
-1. Create your app at https://developer.kii.com.
+1. Create your app at [Kii Developer Portal](https://developer.kii.com).
     * Choose HTML5 as your application's platform.
     * Choose a server location appropriate for you.
     * For detailed information, please refer to 
@@ -64,12 +64,29 @@ used in `ito.init()`.
 2. Configure social network settings (if needed).
     * For detailed information, please refer to
     http://docs.kii.com/en/guides/cloudsdk/javascript/managing-users/social-network-integration/.
-3. Create a bucket named `ito` in the app's application scope, then create a object
-in the bucket, copy and paste `etc/kii-objects.json` inside the
-"Objects Attribute" window, and save it.
-4. Confirm your APP ID and APP KEY.
+3. Create a bucket named `ito` in the app's application scope and edit its ACL as following:
+    * "Create Objects in Bucket": only granted to "Any Authenticated User"
+    * "Query Objects in Bucket": only granted to "Any Authenticated User"
+    * "Drop Bucket With All Content": not granted (to any users)
+    * "Read Objects in Bucket": not granted (to any users)
+4. Confirm your APP ID, APP KEY, CLIENT ID and CLIENT SECRET.
+    * These values are used to deploy Server Code. (see 5.)
+    * The values of APP ID and APP KEY are used in `ito.init()`.
     * For detailed information, please refer to
     http://docs.kii.com/en/guides/cloudsdk/javascript/quickstart/create-app/#checking-appid-and-appkey.
+5. Deploy `etc/kii-server-code.js` as Server Code with `etc/kii-server-hook.json' as Server hook
+    Configuration File, by using
+    [Command Line Tools](http://docs.kii.com/en/guides/commandlinetools/). For example:
+    ```bash
+    $ node kii-cli/bin/kii-servercode.js deploy-file \
+      --file etc/kii-server-code.js \
+      --site [us|eu|cn3|sg|jp] \
+      --app-id <your_app_id> \
+      --app-key <your_app_key> \
+      --client-id <your_client_id> \
+      --client-secret <your_client_secret> \
+      --hook-config etc/kii-server-hook.json
+    ```
 
 # How to run
 

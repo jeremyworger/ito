@@ -1,0 +1,9 @@
+{
+  "kiicloud://groups/*/buckets/itouser": [
+    {
+      "when": "DATA_OBJECT_CREATED",
+      "what": "EXECUTE_SERVER_CODE",
+      "endpoint": "parsePrivateMessage"
+    }
+  ]
+}

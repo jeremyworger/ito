@@ -43,7 +43,8 @@ the server location which you have chosen:
 * ito.provider.kii.SG
 * ito.provider.kii.JP
 
-Note: *The default value of SDK URL is `KiiSDK.min.js` in the same directory.*
+Note: *The default value of SDK URL is `KiiSDK.min.js` in the same directory, since
+Kii Cloud SDK is not available via CDN.*
 
 # Account and Authentication
 
@@ -62,14 +63,14 @@ ito.signIn('(sign-in type)').then(user => {
 * `facebook` [Firebase]: (browsers only) a Facebook account
 * `email` [Firebase, Kii Cloud]: an account with e-mail and password (see below)
 
-### Create an account with E-mail and Password (Firebase)
+### Create an account with E-mail and Password (Firebase, Kii Cloud)
 ```js
 ito.provider.firebase.createUser('(e-mail address)', '(password)').then(user => {
   console.log(user.uid);
 });
 ```
 
-### Sign in with E-mail and Password (Firebase)
+### Sign in with E-mail and Password (Firebase, Kii Cloud)
 ```js
 ito.signIn('email', '(e-mail address)', '(password)').then(user => {
   // Write your codes to be done after signed in
