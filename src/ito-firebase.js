@@ -345,11 +345,12 @@
         let ref = firebase.database().ref('requests/' + firebaseEscape(m)).push();
         let arg = {
           type: 'reject',
-          email: email,
           requestKey: key
         };
         if(usePasscode)
           arg.passcode = passcode;
+        else
+          arg.email = email;
         ref.set(arg).then(
           firebaseFinishRequest(usePasscode ? passcode : firebaseEscape(email), uid)
         ).then(() => {

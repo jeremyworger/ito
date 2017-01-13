@@ -35,18 +35,13 @@
   };
   const KII_BUCKET        = 'ito';
   const KII_GROUP_FRIENDS = 'itofriends';
-  const KII_GROUP_PRIVATE = 'itouser';
 
   /** @type {KiiGroup} */
   let friendsGroup = null;
-  /** @type {KiiGroup} */
-  let privateGroup = null;
   /** @type {KiiBucket} */
   let itoBucket = null;
   /** @type {KiiBucket} */
   let friendsBucket = null;
-  /** @type {KiiBucket} */
-  let privateBucket = null;
   /** @type {KiiObject} */
   let profileRef = null;
   /** @type {KiiObject} */
@@ -254,6 +249,43 @@
         return kiiSetPasscodeRef();
       }
     }
+
+    sendRequest(m, opt) {
+      return new Promise((resolve, reject) => {
+        let user = getUser();
+        Kii.serverCodeEntry('sendRequest').execute({
+          query: m,
+          uid: user.getID(),
+          userName: userName,
+          email: email,
+          options: opt
+        }).then(result => {
+          let r = result[2].getReturnedValue().returnedValue;
+          if(r.result === 'ok')
+            resolve(r.key);
+          else
+            reject(new Error('No user for requested email address or passcode exists.'));
+        });
+      });
+    }
+
+    dropRequest(key, usePasscode) {
+      let object = KiiObject.objectWithURI(key);
+      return object.delete();
+    }
+
+    rejectRequest(key, m, uid, usePasscode) {
+      let arg = {
+        type: 'reject',
+        uid: uid,
+        requestKey: key
+      };
+      if(usePasscode)
+        arg.passcode = passcode;
+      else
+        arg.email = email;
+      return Kii.serverCodeEntry('rejectRequest').execute(arg).catch(() => {});
+    }
   }
   let provider = new KiiProvider(self.ito);
   self.ito.provider.kii = provider;
@@ -344,20 +376,12 @@
         case KII_GROUP_FRIENDS:
           friendsGroup = g;
           return;
-        case KII_GROUP_PRIVATE:
-          privateGroup = g;
-          return;
         }
       });
     }).then(() => {
       if(!friendsGroup) {
         friendsGroup = KiiGroup.groupWithName(KII_GROUP_FRIENDS);
         return friendsGroup.save();
-      }
-    }).then(() => {
-      if(!privateGroup) {
-        privateGroup = KiiGroup.groupWithName(KII_GROUP_PRIVATE);
-        return privateGroup.save();
       }
     })
   }
@@ -380,6 +404,23 @@
         KiiACLAction.KiiACLObjectActionWrite,
         false );
     });
+  }
+
+  /** @param {KiiObject} data */
+  function kiiOnRequest(data) {
+    let type = data.get('type');
+    switch(type) {
+    case 'request':
+      provider.onRequest(data.objectURI(), {
+        userName: data.get('userName'),
+        email: data.get('email'),
+        uid: data.get('uid')
+      }, data.get('isPasscode'), data.get('options') || null);
+      break;
+    case 'reject':
+      provider.onReject(data.requestKey);
+      break;
+    }
   }
 
   function kiiInitMqttClient() {
@@ -413,11 +454,14 @@
         if(body.type === 'DATA_OBJECT_CREATED') {
           let object = KiiObject.objectWithURI(body.sourceURI);
           object.refresh().then(obj => {
+            // DEBUG
             let t = {};
             obj.getKeys().forEach(i => {
               t[i] = obj.get(i);
             });
             console.log(t);
+            // DEBUG
+            kiiOnRequest(obj);
           });
         }
       });
@@ -448,13 +492,31 @@
   }
 
   function kiiSetPasscodeRef() {
-    passcodeRef = itoBucket.createObject();
-    passcodeRef.set('type', 'passcode');
-    passcodeRef.set('passcode', passcode);
-    passcodeRef.set('group', friendsGroup.getID());
-    return passcodeRef.save().then(() => {
-      return kiiSetAppScopeObjectACL(passcodeRef);
-    });
+    let created = !!passcodeRef;
+    if(!created) {
+      return Kii.serverCodeEntry('setPasscode').execute({
+        passcode: passcode,
+        group: friendsGroup.getID()
+      }).then(result => {
+        let r = result[2].getReturnedValue().returnedValue;
+        if(r.result === 'ok') {
+          if(r.uri) {
+            passcodeRef = KiiObject.objectWithURI(r.uri);
+            return passcodeRef.refresh();
+          }
+          else
+            passcodeRef = null;
+        }
+        else
+          return Promise.reject(new Error('the specified passcode is already used'));
+      });
+    }
+    else {
+      passcodeRef.set('type', 'passcode');
+      passcodeRef.set('passcode', passcode);
+      passcodeRef.set('group', friendsGroup.getID());
+      return passcodeRef.save();
+    }
   }
 
   function kiiResetPasscodeRef() {
@@ -468,13 +530,15 @@
       return Promise.resolve();
   }
 
-  function kiiSetEmailRef(created) {
-    emailRef = itoBucket.createObject();
+  function kiiSetEmailRef() {
+    let created = !!emailRef;
+    if(!created)
+      emailRef = itoBucket.createObject();
     emailRef.set('type', 'email');
     emailRef.set('email', email);
     emailRef.set('group', friendsGroup.getID());
     return emailRef.save().then(() => {
-      return created ? kiiSetAppScopeObjectACL(emailRef) : Promise.resolve();
+      return !created ? kiiSetAppScopeObjectACL(emailRef) : Promise.resolve();
     });
   }
 
@@ -492,7 +556,6 @@
     return kiiInitMqttClient().then(kiiInitGroup).then(() => {
       itoBucket = Kii.bucketWithName(KII_BUCKET);
       friendsBucket = friendsGroup.bucketWithName(KII_GROUP_FRIENDS);
-      privateBucket = privateGroup.bucketWithName(KII_GROUP_PRIVATE);
       return friendsBucket.executeQuery(query);
     }).then(params => {
       params[1].forEach(object => {
@@ -528,8 +591,8 @@
       if(!passcodeRef && passcode)
         return kiiSetPasscodeRef();
     }).then(() => {
-      if(email)
-        return kiiSetEmailRef(!emailRef);
+      if(!emailRef && email)
+        return kiiSetEmailRef();
     }).catch(e=>{console.error(e);});
   }
 
@@ -542,10 +605,8 @@
       profileRef.set('status', 'offline');
       return profileRef.save().then(() => {
         friendsGroup = null;
-        privateGroup = null;
         itoBucket = null;
         friendsBucket = null;
-        privateBucket = null;
         profileRef = null;
       });
     }
