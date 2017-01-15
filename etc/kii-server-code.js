@@ -206,44 +206,46 @@ function sendRequest(params, context, done) {
       reason: 'query is not specified'
     });
   else {
-    kiiSearchObjectsInBucket(admin, 'passcode', q).then(function(objects) {
-      if(objects.length > 0) {
-        f = true;
-        return objects[0].get('group');
-      }
-      else
-        return kiiSearchObjectsInBucket(admin, 'email', q).then(function(objects) {
-          return (objects.length > 0) ? objects[0].get('group') : null;
-        });
-    }).then(function(groupId) {
-      if(groupId) {
-        var g = admin.groupWithID(groupId);
-        var b = g.bucketWithName('itofriends');
-        var msg = b.createObject();
-        msg.set('type', 'request');
-        msg.set('query', q);
-        msg.set('uid', u);
-        msg.set('userName', n);
-        msg.set('email', m);
-        msg.set('isPasscode', f);
-        if(o)
-          msg.set('options', o);
-        msg.save().then(function(obj) {
-          return kiiSetGroupScopeObjectACL(obj, g).then(function() {
-            return obj;
-          })
-        }).then(function(obj) {
-          done({
-            result: 'ok',
-            key: obj.objectURI()
+    KiiUser.authenticateWithToken(context.getAccessToken()).then(function(user) {
+      kiiSearchObjectsInBucket(admin, 'passcode', q).then(function(objects) {
+        if(objects.length > 0) {
+          f = true;
+          return objects[0].get('group');
+        }
+        else
+          return kiiSearchObjectsInBucket(admin, 'email', q).then(function(objects) {
+            return (objects.length > 0) ? objects[0].get('group') : null;
           });
-        });
-      }
-      else
-        done({
-          result: 'error',
-          reason: 'the specified email address or passcode does not exist'
-        });
+      }).then(function(groupId) {
+        if(groupId) {
+          var g = admin.groupWithID(groupId);
+          var b = g.bucketWithName('itofriends');
+          var msg = b.createObject();
+          msg.set('type', 'request');
+          msg.set('query', q);
+          msg.set('uid', user.getID());
+          msg.set('userName', n);
+          msg.set('email', m);
+          msg.set('isPasscode', f);
+          if(o)
+            msg.set('options', o);
+          msg.save().then(function(obj) {
+            return kiiSetGroupScopeObjectACL(obj, g).then(function() {
+              return obj;
+            })
+          }).then(function(obj) {
+            done({
+              result: 'ok',
+              key: obj.objectURI()
+            });
+          });
+        }
+        else
+          done({
+            result: 'error',
+            reason: 'the specified email address or passcode does not exist'
+          });
+      });
     }).catch(function() {
       done({
         result: 'error',
@@ -251,6 +253,47 @@ function sendRequest(params, context, done) {
       });
     });
   }
+}
+
+function acceptRequest(params, context, done) {
+  var u = params.uid;
+  var m = params.email;
+  var p = params.passcode;
+  var k = params.requestKey;
+
+  /** @type {KiiAppAdminContext} */
+  var admin = context.getAppAdminContext();
+  KiiUser.authenticateWithToken(context.getAccessToken()).then(function(user) {
+    kiiSearchFriendsGroup(admin, u, 'email').then(function(group) {
+      if(group) {
+        var g = admin.groupWithID(group);
+        var b = g.bucketWithName('itofriends');
+        var msg = b.createObject();
+        msg.set('type', 'accept');
+        msg.set('uid', user.getID());
+        msg.set('email', m);
+        msg.set('requestKey', k);
+        if(p)
+          msg.set('passcode', p);
+        msg.save().then(function(obj) {
+          done({
+            result: 'ok',
+            key: k
+          });
+        });
+      }
+      else
+        done({
+          result: 'error',
+          reason: 'failed to invoke Server Code'
+        });
+    }, function() {
+      done({
+        result: 'error',
+        reason: 'failed to invoke Server Code'
+      });
+    });
+  });
 }
 
 function rejectRequest(params, context, done) {
@@ -261,34 +304,36 @@ function rejectRequest(params, context, done) {
 
   /** @type {KiiAppAdminContext} */
   var admin = context.getAppAdminContext();
-  kiiSearchFriendsGroup(admin, u, 'email').then(function(group) {
-    if(group) {
-      var g = admin.groupWithID(group);
-      var b = g.bucketWithName('itofriends');
-      var msg = b.createObject();
-      msg.set('type', 'reject');
-      msg.set('uid', u);
-      msg.set('requestKey', k);
-      if(p)
-        msg.set('passcode', p);
-      if(m)
-        msg.set('email', m);
-      msg.save().then(function(obj) {
-        done({
-          result: 'ok',
-          key: k
+  KiiUser.authenticateWithToken(context.getAccessToken()).then(function(user) {
+    kiiSearchFriendsGroup(admin, u, 'email').then(function(group) {
+      if(group) {
+        var g = admin.groupWithID(group);
+        var b = g.bucketWithName('itofriends');
+        var msg = b.createObject();
+        msg.set('type', 'reject');
+        msg.set('uid', user.getID());
+        msg.set('requestKey', k);
+        if(p)
+          msg.set('passcode', p);
+        if(m)
+          msg.set('email', m);
+        msg.save().then(function(obj) {
+          done({
+            result: 'ok',
+            key: k
+          });
         });
-      });
-    }
-    else
+      }
+      else
+        done({
+          result: 'error',
+          reason: 'failed to invoke Server Code'
+        });
+    }, function() {
       done({
         result: 'error',
         reason: 'failed to invoke Server Code'
       });
-  }, function() {
-    done({
-      result: 'error',
-      reason: 'failed to invoke Server Code'
     });
   });
 }
