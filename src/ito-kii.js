@@ -311,16 +311,19 @@
     }
 
     sendRemove(uid, m) {
+      let user = getUser();
       return friendsRef[uid] ? (
         kiiRemoveFriend(uid).then(() => {
           /** @type {KiiBucket} */
           let bucket = friendsRef[uid].friendsBucket;
           let msg = bucket.createObject();
           msg.set('type', 'remove');
-          msg.set('uid', uid);
+          msg.set('uid', user.getID());
           msg.save().then(obj => {
             return kiiLimitObjectACL(obj);
           });
+        }).then(() => {
+          provider.onRemoveFriend(uid);
         })
       ) : Promise.resolve();
     }
@@ -487,19 +490,29 @@
     });
   }
 
-  function kiiSetFriendsRef() {
-
-  }
-
   function kiiResetFriendRef(uid) {
     if (!friendsRef[uid])
       return Promise.resolve();
     let bucket = friendsRef[uid].profileBucket;
     let user = getUser();
     return user.pushSubscription().isSubscribed(bucket).then(params => {
-      if (params[2])
+      if (params[2]) {
         return user.pushSubscription().unsubscribe(bucket);
+      }
     });
+  }
+
+  function kiiCheckMessage() {
+    return friendsBucket.executeQuery(KiiQuery.queryWithClause()).then(params => {
+      return Promise.all(params[1].map(obj => { return kiiDispatchNewObject(obj); }));
+    });
+    /*.then(() => {
+      return friendsGroup.getMemberList();
+    }).then(params => {
+      return Promise.all(params[1].map(u => {
+        return map
+      }));
+    });*/
   }
 
   /** @param {KiiObject} data */
@@ -523,9 +536,9 @@
         return kiiSetFriendChangedRef(uid);
       }).then(() => {
         provider.onAccept(data.get('requestKey'), {
-          userName: userName,
-          uid: user.getID(),
-          email: email
+          userName: data.get('userName'),
+          uid: data.get('uid'),
+          email: data.get('email')
         });
       }).then(() => {
         return kiiNotifyFriendAdded(uid);
@@ -549,6 +562,30 @@
       });
       break;
     }
+  }
+
+  /** @param {KiiObject} data */
+  function kiiOnMessage(data) {
+    let user = getUser();
+    let type = data.get('type');
+    let uid = data.get('uid');
+    switch(type) {
+    case 'profile':
+      provider.onUpdateFriend(uid, {
+        userName: data.get('userName'),
+        email: data.get('email'),
+        status: data.get('status')
+      });
+      break;
+    }
+  }
+
+  function kiiDispatchNewObject(object) {
+    return kiiOnRequest(object);
+  }
+
+  function kiiDispatchUpdatedObject(object) {
+    return kiiOnMessage(object);
   }
 
   function kiiInitMqttClient() {
@@ -583,20 +620,12 @@
         switch(body.type) {
         case 'DATA_OBJECT_CREATED':
           object.refresh().then(obj => {
-            kiiOnRequest(obj);
+            kiiDispatchNewObject(obj);
           });
           break;
         case 'DATA_OBJECT_UPDATED':
           object.refresh().then(obj => {
-            switch(obj.get('type')) {
-            case 'profile':
-              provider.onUpdateFriend(object.get('uid'), {
-                userName: object.get('userName'),
-                email: object.get('email'),
-                status: object.get('status')
-              });
-              break;
-            }
+            kiiDispatchUpdatedObject(obj);
           });
           break;
         default:
@@ -607,7 +636,7 @@
     });
   }
 
-  function kiiSetAppScopeObjectACL(object) {
+  function kiiSetAppScopeObjectACL(object, withGroup) {
     return kiiSetACLEntry(
       object,
       new KiiAnyAuthenticatedUser(),
@@ -627,6 +656,13 @@
         KiiACLAction.KiiACLObjectActionWrite,
         false
       );
+    }).then(() => {
+      return withGroup ? kiiSetACLEntry(
+        object,
+        friendsGroup,
+        KiiACLAction.KiiACLObjectActionRead,
+        true
+      ) : Promise.resolve();
     });
   }
 
@@ -675,7 +711,7 @@
     emailRef.set('email', email);
     emailRef.set('group', friendsGroup.getID());
     return emailRef.save().then(() => {
-      return !created ? kiiSetAppScopeObjectACL(emailRef) : Promise.resolve();
+      return !created ? kiiSetAppScopeObjectACL(emailRef, true) : Promise.resolve();
     });
   }
 

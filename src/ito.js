@@ -131,10 +131,12 @@
 
     onUpdateFriend(uid, friend) {
       if (friends[uid] instanceof Object) {
-        Object.keys(friend).forEach(i => {
-          friends[uid][i] = friend[i];
-        });
-        this.parent.emit(new ItoFriendEvent('update', uid, Object.assign(friends[uid])));
+        if(Object.keys(friend).reduce((a, b) => {
+          let f = (b in friends[uid]) && (friends[uid][b] !== friend[b]);
+          friends[uid][b] = friend[b];
+          return a || f;
+        }, false))
+          this.parent.emit(new ItoFriendEvent('update', uid, Object.assign(friends[uid])));
         if (friends[uid].status === 'offline')
           setTimeout(onFriendOffline.bind(this, uid), 500);
       }
