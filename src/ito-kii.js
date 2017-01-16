@@ -78,24 +78,34 @@
       super(parent);
       this.signIn = {
         anonymous: () => {
-          return KiiUser.registerAsPseudoUser().then(() => {
-            currentUser = KiiUser.getCurrentUser();
-            let user = getUser();
-            localStorage.setItem(KII_LOGIN_TYPE, 'anonymous');
-            localStorage.setItem(KII_LOGIN_TOKEN['anonymous'], user.getAccessToken());
-            isOnline = true;
-            return kiiSetProfile();
+          return new Promise((resolve, reject) => {
+            KiiUser.registerAsPseudoUser().then(() => {
+              currentUser = KiiUser.getCurrentUser();
+              let user = getUser();
+              localStorage.setItem(KII_LOGIN_TYPE, 'anonymous');
+              localStorage.setItem(KII_LOGIN_TOKEN['anonymous'], user.getAccessToken());
+              isOnline = true;
+              return kiiSetProfile();
+            }).then(prof => {
+              resolve(prof);
+              kiiCheckMessage();
+            });
           });
         },
         email: (id, pass) => {
-          return KiiUser.authenticate(id, pass).then(() => {
-            currentUser = KiiUser.getCurrentUser();
-            let user = getUser();
-            localStorage.setItem(KII_LOGIN_TYPE, 'email');
-            localStorage.setItem(KII_LOGIN_TOKEN['email'], user.getAccessToken());
-            email = user.getEmailAddress() || user.getID();
-            isOnline = true;
-            return kiiSetProfile();
+          return new Promise((resolve, reject) => {
+            KiiUser.authenticate(id, pass).then(() => {
+              currentUser = KiiUser.getCurrentUser();
+              let user = getUser();
+              localStorage.setItem(KII_LOGIN_TYPE, 'email');
+              localStorage.setItem(KII_LOGIN_TOKEN['email'], user.getAccessToken());
+              email = user.getEmailAddress() || user.getID();
+              isOnline = true;
+              return kiiSetProfile();
+            }).then(prof => {
+              resolve(prof);
+              kiiCheckMessage();
+            });
           });
         }
       };
@@ -159,7 +169,8 @@
         if(token)
           KiiUser.authenticateWithToken(token)
             .then(kiiGetProfile)
-            .then(prof => { resolve(true); });
+            .then(prof => { resolve(true); })
+            .then(kiiCheckMessage);
         else
           resolve(false);
       });
@@ -437,7 +448,7 @@
   }
 
   function kiiLimitObjectACL(object) {
-    let group = KiiGroup.groupWithID(obj.objectURI().replace(/^kiicloud:\/\/groups\/(.*?)\/.*\/(.*)$/, '$1'));
+    let group = KiiGroup.groupWithID(object.objectURI().replace(/^kiicloud:\/\/groups\/(.*?)\/.*\/(.*)$/, '$1'));
     return kiiSetACLEntry(
       object,
       group,
@@ -751,7 +762,7 @@
     if(!friendsRef[uid])
       return Promise.resolve();
     /** @type {KiiBucket} */
-    let bucket = friendsRef[uid].profileBucket;
+    let bucket = friendsRef[uid].friendsBucket;
     if(!bucket)
       return Promise.resolve();
     let user = getUser();
@@ -815,7 +826,8 @@
       });
     }).then(() => {
       return passcode ? kiiSetPasscodeRef() : kiiResetPasscodeRef();
-    }).then(kiiSetEmailRef).catch(e=>{console.error(e);});
+    }).then(kiiSetEmailRef)
+    .catch(e=>{console.error(e);});
   }
 
   function kiiSetOffline() {
