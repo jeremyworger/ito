@@ -38,6 +38,8 @@
   const KII_BUCKET_FRIENDS = KII_GROUP_FRIENDS;
   const KII_BUCKET_PROFILE = 'itoprofile';
 
+  let appId = null;
+
   /** @type {?KiiGroup} */
   let friendsGroup = null;
   /** @type {?KiiBucket} */
@@ -53,6 +55,7 @@
   /** @type {?KiiObject} */
   let emailRef = null;
   let friendsRef = {};
+  let ping = null;
 
   let mqttClient = null;
 
@@ -78,34 +81,24 @@
       super(parent);
       this.signIn = {
         anonymous: () => {
-          return new Promise((resolve, reject) => {
-            KiiUser.registerAsPseudoUser().then(() => {
-              currentUser = KiiUser.getCurrentUser();
-              let user = getUser();
-              localStorage.setItem(KII_LOGIN_TYPE, 'anonymous');
-              localStorage.setItem(KII_LOGIN_TOKEN['anonymous'], user.getAccessToken());
-              isOnline = true;
-              return kiiSetProfile();
-            }).then(prof => {
-              resolve(prof);
-              kiiCheckMessage();
-            });
+          return KiiUser.registerAsPseudoUser().then(() => {
+            currentUser = KiiUser.getCurrentUser();
+            let user = getUser();
+            localStorage.setItem(KII_LOGIN_TYPE, 'anonymous');
+            localStorage.setItem(KII_LOGIN_TOKEN['anonymous'], user.getAccessToken());
+            isOnline = true;
+            return kiiSetProfile();
           });
         },
         email: (id, pass) => {
-          return new Promise((resolve, reject) => {
-            KiiUser.authenticate(id, pass).then(() => {
-              currentUser = KiiUser.getCurrentUser();
-              let user = getUser();
-              localStorage.setItem(KII_LOGIN_TYPE, 'email');
-              localStorage.setItem(KII_LOGIN_TOKEN['email'], user.getAccessToken());
-              email = user.getEmailAddress() || user.getID();
-              isOnline = true;
-              return kiiSetProfile();
-            }).then(prof => {
-              resolve(prof);
-              kiiCheckMessage();
-            });
+          return KiiUser.authenticate(id, pass).then(() => {
+            currentUser = KiiUser.getCurrentUser();
+            let user = getUser();
+            localStorage.setItem(KII_LOGIN_TYPE, 'email');
+            localStorage.setItem(KII_LOGIN_TOKEN['email'], user.getAccessToken());
+            email = user.getEmailAddress() || user.getID();
+            isOnline = true;
+            return kiiSetProfile();
           });
         }
       };
@@ -163,14 +156,14 @@
     init(arg) {
       return new Promise((resolve, reject) => {
         development = !!arg && !!arg.development;
-        Kii.initializeWithSite(arg.appId, arg.appKey, KiiSite[arg.serverLocation]);
+        appId = !!arg && arg.appId;
+        Kii.initializeWithSite(appId, arg.appKey, KiiSite[arg.serverLocation]);
         let type = localStorage.getItem(KII_LOGIN_TYPE);
         let token = localStorage.getItem(KII_LOGIN_TOKEN[type]);
         if(token)
           KiiUser.authenticateWithToken(token)
             .then(kiiGetProfile)
-            .then(prof => { resolve(true); })
-            .then(kiiCheckMessage);
+            .then(prof => { resolve(true); });
         else
           resolve(false);
       });
@@ -439,8 +432,8 @@
     })
   }
 
-  function kiiSetACLEntry(object, scope, action, grant) {
-    let acl = (object.objectACL || object.acl)();
+  function kiiSetACLEntry(target, scope, action, grant) {
+    let acl = (target.objectACL || target.acl)();
     let entry = KiiACLEntry.entryWithSubject(scope, action);
     entry.setGrant(grant);
     acl.putACLEntry(entry);
@@ -454,14 +447,15 @@
       group,
       KiiACLAction.KiiACLObjectActionRead,
       false
-    ).then(() => {
+    )
+    /*.then(() => {
       return kiiSetACLEntry(
         object,
         group,
         KiiACLAction.KiiACLObjectActionWrite,
         false
       );
-    });
+    })*/;
   }
 
   function kiiInitProfileRef() {
@@ -472,7 +466,14 @@
         profileRef,
         friendsGroup,
         KiiACLAction.KiiACLObjectActionWrite,
-        false );
+        false
+      ).then(() => {
+        return kiiSetACLEntry(
+          profileBucket,
+          friendsGroup,
+          KiiACLAction.KiiACLBucketActionReadObjects,
+          true );
+      });
     });
   }
 
@@ -490,7 +491,7 @@
               profileBucket: pb,
               profile: p[1][0]
             };
-            return p[1][0].refresh();
+            return p[1][0];
           }
           else
             return null;
@@ -513,17 +514,48 @@
     });
   }
 
-  function kiiCheckMessage() {
-    return friendsBucket.executeQuery(KiiQuery.queryWithClause()).then(params => {
+  function kiiCheckAll() {
+    let user = getUser();
+    friendsGroup.getMemberList().then(params => {
+      return Promise.all(params[1].filter(u => {
+        return u.getID() !== user.getID();
+      }).map(u => {
+        return u.ownerOfGroups().then(params => {
+          let g = params[1][0];
+          if(g) {
+            let uid = u.getID();
+            let fb = g.bucketWithName(KII_BUCKET_FRIENDS);
+            let pb = g.bucketWithName(KII_BUCKET_PROFILE);
+            let q = KiiQuery.queryWithClause(KiiClause.equals('type', 'profile'));
+            return pb.executeQuery(q).then(p => {
+              if(p[1].length > 0) {
+                let friend = p[1][0];
+                friendsRef[uid] = {
+                  friendsBucket: fb,
+                  profileBucket: pb,
+                  profile: friend
+                };
+                provider.onAddFriend(uid, {
+                  email: friend.get('email'),
+                  userName: friend.get('userName'),
+                  status: friend.get('status')
+                });
+              }
+            });
+          }
+        })
+      }));
+    }).then(() => {
+      return friendsBucket.executeQuery(KiiQuery.queryWithClause());
+    }).then(params => {
       return Promise.all(params[1].map(obj => { return kiiDispatchNewObject(obj); }));
     });
-    /*.then(() => {
-      return friendsGroup.getMemberList();
-    }).then(params => {
-      return Promise.all(params[1].map(u => {
-        return map
-      }));
-    });*/
+  }
+
+  function kiiRefreshAll() {
+    return Promise.all(Object.keys(friendsRef).map(k => {
+      return friendsRef[k].profile.refresh().then(kiiOnMessage);
+    }));
   }
 
   /** @param {KiiObject} data */
@@ -628,6 +660,7 @@
       mqttClient.on('message', (topic, message, packet) => {
         let body = JSON.parse(message.toString());
         let object = KiiObject.objectWithURI(body.sourceURI);
+        console.log(body.type, body.sourceURI);
         switch(body.type) {
         case 'DATA_OBJECT_CREATED':
           object.refresh().then(obj => {
@@ -647,7 +680,7 @@
     });
   }
 
-  function kiiSetAppScopeObjectACL(object, withGroup) {
+  function kiiSetAppScopeObjectACL(object) {
     return kiiSetACLEntry(
       object,
       new KiiAnyAuthenticatedUser(),
@@ -667,13 +700,6 @@
         KiiACLAction.KiiACLObjectActionWrite,
         false
       );
-    }).then(() => {
-      return withGroup ? kiiSetACLEntry(
-        object,
-        friendsGroup,
-        KiiACLAction.KiiACLObjectActionRead,
-        true
-      ) : Promise.resolve();
     });
   }
 
@@ -717,10 +743,10 @@
     let created = !!emailRef;
     if(!created)
       emailRef = itoBucket.createObject();
-    console.log(friendsGroup.getID());
     emailRef.set('type', 'email');
     emailRef.set('email', email);
     emailRef.set('group', friendsGroup.getID());
+    emailRef.set('status', 'online');
     return emailRef.save().then(() => {
       return !created ? kiiSetAppScopeObjectACL(emailRef, true) : Promise.resolve();
     });
@@ -749,7 +775,7 @@
             userName: friend.get('userName'),
             status: friend.get('status')
           });
-        });
+        }, e=>{console.error(e);});
       }
       else
         return group.refresh().then(g => {
@@ -784,6 +810,11 @@
       friendsGroup.removeUser(KiiUser.userWithID(uid));
       return friendsGroup.save();
     });
+  }
+
+  function kiiPing() {
+    if(isOnline && emailRef)
+      emailRef.save();
   }
 
   function kiiOnOnline() {
@@ -827,10 +858,18 @@
     }).then(() => {
       return passcode ? kiiSetPasscodeRef() : kiiResetPasscodeRef();
     }).then(kiiSetEmailRef)
-    .catch(e=>{console.error(e);});
+    .then(kiiCheckAll)
+    .then(() => {
+      if(!ping)
+        ping = setInterval(kiiPing, 5000);
+    }).catch(e=>{console.error(e);});
   }
 
   function kiiSetOffline() {
+    if(ping) {
+      clearInterval(ping);
+      ping = null;
+    }
     if(mqttClient) {
       mqttClient.end();
       mqttClient = null;
@@ -838,6 +877,11 @@
     if(profileRef) {
       profileRef.set('status', 'offline');
       return profileRef.save().then(() => {
+        return emailRef.save();
+      }).then(() => {
+        emailRef.set('status', 'offline');
+        return emailRef.save();
+      }).then(() => {
         friendsGroup = null;
         itoBucket = null;
         friendsBucket = null;
@@ -863,6 +907,31 @@
       return Promise.resolve();
   }
 
+  if(isBrowser) {
+    window.addEventListener('unload', () => {
+      let user = getUser();
+      if(user) {
+        // I wish I cloud deprecate use of synchronous XHR...
+        let xhr = new XMLHttpRequest();
+        xhr.open(
+          'POST',
+          'https://api-jp.kii.com/api/apps/' + appId + '/server-code/versions/current/onOffline',
+          false
+        );
+        xhr.setRequestHeader('Authorization', 'Bearer ' + user.getAccessToken());
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.send(JSON.stringify({a: 0}));
+      }
+    });
+    window.addEventListener('online', () => {
+      isOnline = true;
+      kiiRefreshAll();
+    });
+    window.addEventListener('offline', () => {
+      isOnline = false;
+    });
+  }
+
   /*
    * Firebase Database: Chat Messages
    */
@@ -870,4 +939,4 @@
 
   if(!isBrowser)
     module.exports = self.ito;
-})(typeof window === 'object' ? window : global, typeof window === 'object');
+})(this, typeof window === 'object');

@@ -67,6 +67,11 @@ function kiiSearchObjectsInBucket(admin, type, value) {
   });
 }
 
+function kiiSetOffline(object) {
+  object.set('status', 'offline');
+  return object.save();
+}
+
 function parseItoMessage(params, context, done) {
   /** @type {KiiAppAdminContext} */
   var admin = context.getAppAdminContext();
@@ -283,15 +288,12 @@ function acceptRequest(params, context, done) {
         });
       }
       else
-        done({
-          result: 'error',
-          reason: 'failed to invoke Server Code'
-        });
-    }, function() {
-      done({
-        result: 'error',
-        reason: 'failed to invoke Server Code'
-      });
+        throw null;
+    });
+  }).catch(function() {
+    done({
+      result: 'error',
+      reason: 'failed to invoke Server Code'
     });
   });
 }
@@ -305,7 +307,7 @@ function rejectRequest(params, context, done) {
   /** @type {KiiAppAdminContext} */
   var admin = context.getAppAdminContext();
   KiiUser.authenticateWithToken(context.getAccessToken()).then(function(user) {
-    kiiSearchFriendsGroup(admin, u, 'email').then(function(group) {
+    return kiiSearchFriendsGroup(admin, u, 'email').then(function(group) {
       if(group) {
         var g = admin.groupWithID(group);
         var b = g.bucketWithName('itofriends');
@@ -325,15 +327,74 @@ function rejectRequest(params, context, done) {
         });
       }
       else
-        done({
-          result: 'error',
-          reason: 'failed to invoke Server Code'
-        });
-    }, function() {
-      done({
-        result: 'error',
-        reason: 'failed to invoke Server Code'
-      });
+        throw null;
+    });
+  }).catch(function() {
+    done({
+      result: 'error',
+      reason: 'failed to invoke Server Code'
     });
   });
+}
+
+function onOffline(params, context, done) {
+  KiiUser.authenticateWithToken(context.getAccessToken()).then(function(user) {
+    var b = Kii.bucketWithName('ito');
+    var q = KiiQuery.queryWithClause(KiiClause.and(
+      KiiClause.equals('_owner', user.getID()),
+      KiiClause.equals('type', 'email')
+    ));
+    b.executeQuery(q).then(function(params) {
+      if(params[1].length > 0) {
+        kiiSetOffline(params[1][0]).then(function(obj) {
+          var g = KiiGroup.groupWithID(obj.get('group'));
+          return g.bucketWithName('itoprofile').executeQuery(
+            KiiQuery.queryWithClause(KiiClause.equals('type', 'profile'))
+          );
+        }).then(function(params) {
+          if(params[1].length > 0) {
+            kiiSetOffline(params[1][0]).then(function() {
+              done({
+                result: 'ok'
+              });
+            });
+          }
+          else
+            throw null;
+        });
+      }
+      else
+        throw null;
+    });    
+  }).catch(function() {
+    done({
+      result: 'error',
+      reason: 'failed to invoke Server Code'
+    });
+  });
+}
+
+function checkPing(params, context, done) {
+  /** @type {KiiAppAdminContext} */
+  var admin = context.getAppAdminContext();
+  var b = admin.bucketWithName('ito');
+  var q = KiiQuery.queryWithClause(KiiClause.and(
+    KiiClause.equals('type', 'email'),
+    KiiClause.equals('status', 'online')
+  ));
+  b.executeQuery(q).then(function(params) {
+    return Promise.all(params[1].map(function(/** @type {KiiObject} */obj) {
+      var g = obj.get('group');
+      console.log('   ' + g + ': ' + obj.getModified() + ' / ' + Date.now() + ' / ' + (Date.now() - parseInt(obj.getModified())));
+      if(g && parseInt(obj.getModified()) + 15000 < Date.now()) {
+        return kiiSetOffline(obj).then(function() {
+          return admin.groupWithID(g).bucketWithName('itoprofile').executeQuery(
+            KiiQuery.queryWithClause(KiiClause.equals('type', 'profile'))
+          )
+        }).then(function(params) {
+          return kiiSetOffline(params[1][0]);
+        });
+      }
+    })).then(done);
+  }).catch(done);
 }

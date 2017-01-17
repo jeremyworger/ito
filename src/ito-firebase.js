@@ -1088,4 +1088,4 @@
 
   if(!isBrowser)
     module.exports = self.ito;
-})(typeof window === 'object' ? window : global, typeof window === 'object');
+})(this, typeof window === 'object');

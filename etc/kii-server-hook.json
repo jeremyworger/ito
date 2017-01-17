@@ -5,5 +5,12 @@
       "what": "EXECUTE_SERVER_CODE",
       "endpoint": "parseItoMessage"
     }
-  ]
+  ],
+  "kiicloud://scheduler": {
+    "check_ping": {
+      "cron": "0/1 * * * *",
+      "endpoint": "checkPing",
+      "what": "EXECUTE_SERVER_CODE"
+    }
+  }
 }

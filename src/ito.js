@@ -1150,4 +1150,4 @@
       localStorage: self.localStorage
     };
   }
-})(typeof window === 'object' ? window : global, typeof window === 'object');
+})(this, typeof window === 'object');
