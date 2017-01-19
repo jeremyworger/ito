@@ -345,6 +345,88 @@
         return { uid: uid, messageKey: kiiObjectURIToKey(obj) };
       });
     }
+
+    /*
+     * Firebase Database: WebRTC Signaling Messages
+     */
+    sendInvite(uid, opt) {
+      let user = getUser();
+      return kiiPutMessageObject(uid, {
+        rel: 'signaling',
+        type: 'invite',
+        audio: opt.audio,
+        video: opt.video,
+        dataChannel: !!opt.dataChannel
+      }).then(obj => {
+        // TODO: consider how to cancel 'invite' message when disconnecting
+        // Firebase: ref.onDisconnect().remove();
+        return kiiObjectURIToKey(obj);
+      });
+    }
+
+    sendAccept(uid, cid, opt) {
+      let user = getUser();
+      return kiiPutMessageObject(uid, {
+        rel: 'signaling',
+        type: 'accept',
+        cid: cid,
+        audio: opt.audio,
+        video: opt.video
+      }).then(obj => {
+        return;
+      });
+    }
+
+    sendReject(uid, cid, reason) {
+      let user = getUser();
+      return kiiPutMessageObject(uid, {
+        rel: 'signaling',
+        type: 'reject',
+        cid: cid,
+        reason: reason
+      }).then(obj => {
+        return;
+      });
+    }
+
+    sendReconnect(uid, cid, opt) {
+      let user = getUser();
+      return kiiPutMessageObject(uid, {
+        rel: 'signaling',
+        type: 'reconnect',
+        cid: cid,
+        audio: opt.audio,
+        video: opt.video,
+        dataChannel: !!opt.dataChannel
+      }).then(obj => {
+        return;
+      });
+    }
+
+    sendClose(uid, cid) {
+      let user = getUser();
+      return kiiPutMessageObject(uid, {
+        rel: 'signaling',
+        type: 'close',
+        cid: cid
+      }).then(obj => {
+        return;
+      });
+    }
+
+    sendSignaling(uid, cid, type, data) {
+      let user = getUser();
+      return kiiPutMessageObject(uid, {
+        rel: 'signaling',
+        type: 'signaling',
+        signalingType: type,
+        uid: user.uid,
+        cid: cid,
+        data: JSON.stringify(data)
+      }).then(obj => {
+        return;
+      });
+    }
   }
   let provider = new KiiProvider(self.ito);
   self.ito.provider.kii = provider;
@@ -481,6 +563,14 @@
     }).then(() => {
       return msg;
     });
+  }
+
+  /** @param {KiiObject} object */
+  function kiiConvertObject(object) {
+    return object.getKeys().reduce((a, b) => {
+      a[b] = object.get(b);
+      return a;
+    }, {});
   }
 
   function kiiInitProfileRef() {
@@ -657,6 +747,9 @@
     switch(object.get('rel')) {
     case 'message':
       kiiDispatchMessageObject(object);
+      break;
+    case 'signaling':
+      kiiDispatchSignalingObject(object);
       break;
     default:
       kiiOnRequest(object);
@@ -956,6 +1049,36 @@
       break;
     }
   }
+
+  /*
+   * Firebase Database: WebRTC Signaling Messages
+   */
+  /** @param {KiiObject} object */
+  function kiiDispatchSignalingObject(object) {
+    const key = object.get('cid') || kiiObjectURIToKey(object);
+    let v = kiiConvertObject(object);
+    object.delete().then(() => {
+      switch(v.type) {
+      case 'invite':
+        provider.onInvite(v);          
+        break;
+      case 'accept':
+        provider.onAcceptInvite(v);
+        break;
+      case 'reconnect':
+        provider.onReconnect(v);
+        break;
+      case 'reject':
+      case 'close':
+        provider.onClose(v);
+        break;
+      case 'signaling':
+        provider.onSignaling(v);
+        break;
+      }
+    });
+  }
+
 
   if(isBrowser) {
     window.addEventListener('unload', () => {
