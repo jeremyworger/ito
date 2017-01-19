@@ -242,7 +242,7 @@
     }
 
     /*
-     * Firebase Database: User Accounts and Status
+     * Kii Cloud: User Accounts and Status
      */
     getPasscode() {
       return passcode;
@@ -330,6 +330,20 @@
           provider.onRemoveFriend(uid);
         })
       ) : Promise.resolve();
+    }
+
+    /*
+     * Kii Cloud: Chat Messages
+     */
+    sendMessage(uid, msg) {
+      let user = getUser();
+      return kiiPutMessageObject(uid, {
+        rel: 'message',
+        type: 'message',
+        data: msg
+      }).then(obj => {
+        return { uid: uid, messageKey: kiiObjectURIToKey(obj) };
+      });
     }
   }
   let provider = new KiiProvider(self.ito);
@@ -447,15 +461,26 @@
       group,
       KiiACLAction.KiiACLObjectActionRead,
       false
-    )
-    /*.then(() => {
-      return kiiSetACLEntry(
-        object,
-        group,
-        KiiACLAction.KiiACLObjectActionWrite,
-        false
-      );
-    })*/;
+    );
+  }
+
+  /** @param {KiiObject} object */
+  function kiiPutMessageObject(uid, data) {
+    /** @type {KiiBucket} */
+    let bucket = friendsRef[uid].friendsBucket;
+    if(!bucket)
+      return Promise.reject(new Error('no such friend: ' + uid));
+    let user = getUser();
+    let msg = bucket.createObject();
+    Object.keys(data).forEach(k => {
+      msg.set(k, data[k]);
+    });
+    msg.set('uid', user.getID());
+    return msg.save().then(obj => {
+      return kiiLimitObjectACL(obj);
+    }).then(() => {
+      return msg;
+    });
   }
 
   function kiiInitProfileRef() {
@@ -558,6 +583,11 @@
     }));
   }
 
+  /** @param {KiiObject} object */
+  function kiiObjectURIToKey(object) {
+    return object.objectURI().replace(/^kiicloud:\/\/groups\/(.*?)\/.*\/(.*)$/, '$1/$2');
+  }
+
   /** @param {KiiObject} data */
   function kiiOnRequest(data) {
     let user = getUser();
@@ -566,7 +596,7 @@
     let key;
     switch(type) {
     case 'request':
-      provider.onRequest(data.objectURI().replace(/^kiicloud:\/\/groups\/(.*?)\/.*\/(.*)$/, '$1/$2'), {
+      provider.onRequest(kiiObjectURIToKey(data), {
         userName: data.get('userName'),
         email: data.get('email'),
         uid: uid
@@ -594,7 +624,7 @@
       break;
     case 'addfriend':
       data.delete().then(() => {
-        kiiSetFriendChangedRef(uid);
+        return kiiSetFriendChangedRef(uid);
       });
       break;
     case 'remove':
@@ -624,7 +654,14 @@
   }
 
   function kiiDispatchNewObject(object) {
-    return kiiOnRequest(object);
+    switch(object.get('rel')) {
+    case 'message':
+      kiiDispatchMessageObject(object);
+      break;
+    default:
+      kiiOnRequest(object);
+      break;
+    }
   }
 
   function kiiDispatchUpdatedObject(object) {
@@ -660,7 +697,6 @@
       mqttClient.on('message', (topic, message, packet) => {
         let body = JSON.parse(message.toString());
         let object = KiiObject.objectWithURI(body.sourceURI);
-        console.log(body.type, body.sourceURI);
         switch(body.type) {
         case 'DATA_OBJECT_CREATED':
           object.refresh().then(obj => {
@@ -787,17 +823,7 @@
   function kiiNotifyFriendAdded(uid) {
     if(!friendsRef[uid])
       return Promise.resolve();
-    /** @type {KiiBucket} */
-    let bucket = friendsRef[uid].friendsBucket;
-    if(!bucket)
-      return Promise.resolve();
-    let user = getUser();
-    let msg = bucket.createObject();
-    msg.set('type', 'addfriend');
-    msg.set('uid', user.getID());
-    return msg.save().then(obj => {
-      return kiiLimitObjectACL(obj);
-    });
+    return kiiPutMessageObject(uid, { type: 'addfriend' });
   }
 
   function kiiAddFriend(uid) {
@@ -907,6 +933,30 @@
       return Promise.resolve();
   }
 
+  /*
+   * Kii Cloud: Chat Messages
+   */
+  /** @param {KiiObject} object */
+  function kiiDispatchMessageObject(object) {
+    let uid = object.get('uid');
+    switch(object.get('type')) {
+    case 'message':
+      provider.onMessage(uid, object.get('data'));
+      kiiPutMessageObject(uid, {
+        rel: 'message',
+        type: 'ack',
+        messageKey: kiiObjectURIToKey(object)
+      }).then(() => {
+        return object.delete();
+      });
+      break;
+    case 'ack':
+      provider.onMessageAck(uid, object.get('messageKey'));
+      object.delete();
+      break;
+    }
+  }
+
   if(isBrowser) {
     window.addEventListener('unload', () => {
       let user = getUser();
@@ -931,11 +981,6 @@
       isOnline = false;
     });
   }
-
-  /*
-   * Firebase Database: Chat Messages
-   */
-
 
   if(!isBrowser)
     module.exports = self.ito;
