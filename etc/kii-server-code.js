@@ -72,6 +72,24 @@ function kiiSetOffline(object) {
   return object.save();
 }
 
+/**
+ * @param {KiiAppAdminContext} admin
+ * @param {Array<string>} uris
+ */
+function kiiRemovePendingRequests(admin, uris) {
+  if(!$.isArray(uris))
+    return Promise.resolve();
+  else
+    return Promise.all(uris.map(function(uri) {
+      try {
+        var obj = admin.objectWithURI(uri);
+        return obj ? obj.delete().catch(function() {}) : Promise.resolve();
+      } catch(e) {
+        return Promise.resolve();
+      }
+    }));
+}
+
 function parseItoMessage(params, context, done) {
   /** @type {KiiAppAdminContext} */
   var admin = context.getAppAdminContext();
@@ -337,6 +355,15 @@ function rejectRequest(params, context, done) {
   });
 }
 
+function removePendingRequests(params, context, done) {
+  var u = params.pendingRequests;
+  (u ? kiiRemovePendingRequests(context.getAppAdminContext(), u) : Promise.resolve()).then(function() {
+    done({
+      result: 'ok'
+    });
+  })
+}
+
 function onOffline(params, context, done) {
   KiiUser.authenticateWithToken(context.getAccessToken()).then(function(user) {
     var b = Kii.bucketWithName('ito');
@@ -344,6 +371,7 @@ function onOffline(params, context, done) {
       KiiClause.equals('_owner', user.getID()),
       KiiClause.equals('type', 'email')
     ));
+    var u = params.pendingRequests;
     b.executeQuery(q).then(function(params) {
       if(params[1].length > 0) {
         kiiSetOffline(params[1][0]).then(function(obj) {
@@ -354,6 +382,8 @@ function onOffline(params, context, done) {
         }).then(function(params) {
           if(params[1].length > 0) {
             kiiSetOffline(params[1][0]).then(function() {
+              return kiiRemovePendingRequests(context.getAppAdminContext(), u);
+            }).then(function() {
               done({
                 result: 'ok'
               });
@@ -380,21 +410,20 @@ function checkPing(params, context, done) {
   var b = admin.bucketWithName('ito');
   var q = KiiQuery.queryWithClause(KiiClause.and(
     KiiClause.equals('type', 'email'),
-    KiiClause.equals('status', 'online')
+    KiiClause.equals('status', 'online'),
+    KiiClause.lessThan('_modified', Date.now() - 15000)
   ));
   b.executeQuery(q).then(function(params) {
     return Promise.all(params[1].map(function(/** @type {KiiObject} */obj) {
       var g = obj.get('group');
       console.log('   ' + g + ': ' + obj.getModified() + ' / ' + Date.now() + ' / ' + (Date.now() - parseInt(obj.getModified())));
-      if(g && parseInt(obj.getModified()) + 15000 < Date.now()) {
-        return kiiSetOffline(obj).then(function() {
-          return admin.groupWithID(g).bucketWithName('itoprofile').executeQuery(
-            KiiQuery.queryWithClause(KiiClause.equals('type', 'profile'))
-          )
-        }).then(function(params) {
-          return kiiSetOffline(params[1][0]);
-        });
-      }
+      return kiiSetOffline(obj).then(function() {
+        return admin.groupWithID(g).bucketWithName('itoprofile').executeQuery(
+          KiiQuery.queryWithClause(KiiClause.equals('type', 'profile'))
+        )
+      }).then(function(params) {
+        return kiiSetOffline(params[1][0]);
+      });
     })).then(done);
   }).catch(done);
 }

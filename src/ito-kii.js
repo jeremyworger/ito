@@ -56,8 +56,13 @@
   let emailRef = null;
   let friendsRef = {};
   let ping = null;
+  /** @type {Array<stirng>} */
+  let pendingRequests = [];
 
   let mqttClient = null;
+
+  /** @type {Array<KiiObject>} */
+  let queue = [];
 
   /** @type {boolean} */
   let development = true;
@@ -358,8 +363,7 @@
         video: opt.video,
         dataChannel: !!opt.dataChannel
       }).then(obj => {
-        // TODO: consider how to cancel 'invite' message when disconnecting
-        // Firebase: ref.onDisconnect().remove();
+        pendingRequests.push(obj.objectURI());
         return kiiObjectURIToKey(obj);
       });
     }
@@ -420,7 +424,6 @@
         rel: 'signaling',
         type: 'signaling',
         signalingType: type,
-        uid: user.uid,
         cid: cid,
         data: JSON.stringify(data)
       }).then(obj => {
@@ -547,6 +550,11 @@
   }
 
   /** @param {KiiObject} object */
+  function kiiShiftQueueobject() {
+    // TODO: implement message queuing, for the purpose of avoiding too many simultaneous connection
+  }
+
+  /** @param {KiiObject} data */
   function kiiPutMessageObject(uid, data) {
     /** @type {KiiBucket} */
     let bucket = friendsRef[uid].friendsBucket;
@@ -790,6 +798,7 @@
       mqttClient.on('message', (topic, message, packet) => {
         let body = JSON.parse(message.toString());
         let object = KiiObject.objectWithURI(body.sourceURI);
+        let i;
         switch(body.type) {
         case 'DATA_OBJECT_CREATED':
           object.refresh().then(obj => {
@@ -800,6 +809,11 @@
           object.refresh().then(obj => {
             kiiDispatchUpdatedObject(obj);
           });
+          break;
+        case 'DATA_OBJECT_DELETED':
+          i = pendingRequests.indexOf(object.objectURI());
+          if(i >= 0)
+            pendingRequests.splice(i, 1);
           break;
         default:
           console.log(body.type, body.sourceURI);
@@ -931,9 +945,28 @@
     });
   }
 
+  function kiiSetPing() {
+    if(!ping)
+      ping = setInterval(kiiPing, 5000);
+  }
+
+  function kiiResetPing() {
+    if(ping) {
+      clearInterval(ping);
+      ping = null;
+    }
+  }
+
   function kiiPing() {
-    if(isOnline && emailRef)
-      emailRef.save();
+    if(isOnline && emailRef && (!document || document.visibilityState === 'visible')) {
+      emailRef.set('status', 'online');
+      emailRef.save().then(() => {
+        profileRef.set('status', 'online');
+        profileRef.save();
+      })
+    }
+    else
+      kiiResetPing();
   }
 
   function kiiOnOnline() {
@@ -985,10 +1018,7 @@
   }
 
   function kiiSetOffline() {
-    if(ping) {
-      clearInterval(ping);
-      ping = null;
-    }
+    kiiResetPing();
     if(mqttClient) {
       mqttClient.end();
       mqttClient = null;
@@ -1005,6 +1035,9 @@
         itoBucket = null;
         friendsBucket = null;
         profileRef = null;
+        return Kii.serverCodeEntry('removePendingRequests').execute({
+          pendingRequests: pendingRequests
+        });
       });
     }
     else
@@ -1057,6 +1090,7 @@
   function kiiDispatchSignalingObject(object) {
     const key = object.get('cid') || kiiObjectURIToKey(object);
     let v = kiiConvertObject(object);
+    v.cid = key;
     object.delete().then(() => {
       switch(v.type) {
       case 'invite':
@@ -1093,16 +1127,27 @@
         );
         xhr.setRequestHeader('Authorization', 'Bearer ' + user.getAccessToken());
         xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.send(JSON.stringify({a: 0}));
+        xhr.send(JSON.stringify({pendingRequests: pendingRequests}));
       }
     });
+
     window.addEventListener('online', () => {
       isOnline = true;
       kiiRefreshAll();
+      kiiSetPing();
     });
+
     window.addEventListener('offline', () => {
       isOnline = false;
+      kiiResetPing();
     });
+
+    if(document) {
+      document.addEventListener('visibilitychange', () => {
+        if(document.visibilityState === 'visible')
+          kiiSetPing();
+      });
+    }
   }
 
   if(!isBrowser)

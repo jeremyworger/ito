@@ -228,18 +228,15 @@
         let pc = e.peerConnection;
         if (pc)
           pc.close();
+        const isRejected = (e.isOfferer && e.state === 'inviting');
         onEndpointStateChange(uid, cid, 'closed');
         delete endpoints[uid][cid];
         delete epOpt[uid][cid];
-        if (opt.reject) {
-          const reason = options.reason ? options.rejected : 'terminated';
-          opt.reject(new Error(reason));
-          if (e.isOfferer) {
-            e.emit(new ItoEndpointRejectEvent(e, reason));
-            return;
-          }
-        }
-        e.emit(new ItoEndpointEvent('close', e));
+        const reason = options.reason || 'terminated';
+        if (isRejected)
+          e.emit(new ItoEndpointRejectEvent(e, reason));
+        else
+          e.emit(new ItoEndpointEvent('close', e));
       }
     }
 
@@ -558,7 +555,7 @@
       if(!(opt instanceof Object))
         return Promise.reject(new Error('the third argument is not an appropriate option.'));
       return new Promise((resolve, reject) => {
-        if (!MediaStream)
+        if (!MediaStream || !RTCPeerConnection)
           reject(new Error('WebRTC is not available on this browser'))
         else if (!friends[uid])
           reject(new Error('not registered as a friend: ' + uid));
@@ -699,12 +696,6 @@
       });
     pc.addEventListener('iceconnectionstatechange', () => {
       if (e.state === 'connecting' && pc.iceConnectionState.match(/^(connected|completed)$/)) {
-        let resolve = opt.resolve;
-        if (resolve) {
-          delete opt.resolve;
-          delete opt.reject;
-          resolve();
-        }
         onEndpointStateChange(uid, cid, 'open');
         if (!opt.peerConnection) {
           e.emit(new ItoEndpointEvent('open', e));
@@ -893,12 +884,6 @@
         useDataChannel: !!data,
         buffer: []
       }
-      this.ready = new Promise(((resolve, reject) => {
-        const uid = this.peer;
-        const cid = this.connection;
-        epOpt[uid][cid].resolve = resolve;
-        epOpt[uid][cid].reject = reject;
-      }).bind(this));
     }
 
     setInputStream(stream) {
