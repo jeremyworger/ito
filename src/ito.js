@@ -640,7 +640,6 @@
   function updateStream(e, stream) {
     let s = e.receivedStream;
     if (!s) {
-      console.log('stream', stream);
       e.receivedStream = stream;
       e.emit(new ItoEndpointAddStreamEvent(e, stream));
     }
@@ -651,11 +650,9 @@
         s.getTracks().filter(track => {
           return stream.getTracks().indexOf(track) < 0;
         }).forEach(track => {
-          console.log('removetrack', track);
           s.removeTrack(track);
         });
         stream.getTracks().forEach(track => {
-          console.log('addtrack', track);
           s.addTrack(track);
         });
       }
@@ -709,7 +706,6 @@
           let f = opt.negotiationReady;
           opt.negotiationReady = false;
           opt.negotiationNeeded = true;
-          console.log('negotiationready', opt.negotiationReady);
           if (f)
             sendReconnect(e);
         });
@@ -794,7 +790,6 @@
 
   function onSdp(e, sdp) {
     this.setLocalDescription(sdp).then(() => {
-      console.log('local', sdp.type);
       provider.sendSignaling(e.peer, e.connection, 'sdp', sdp);
     });
   }
@@ -808,7 +803,6 @@
     let pc = e.peerConnection;
     let sdp = new RTCSessionDescription(JSON.parse(data));
     pc.setRemoteDescription(sdp).then(() => {
-      console.log('remote', sdp.type);
       if (sdp.type === 'offer')
         pc.createAnswer(createSdpOptions(e)).then(onSdp.bind(pc, e));
     }, error => {

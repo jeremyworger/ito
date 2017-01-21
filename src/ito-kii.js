@@ -61,8 +61,8 @@
 
   let mqttClient = null;
 
-  /** @type {Array<KiiObject>} */
-  let queue = [];
+  let funcQueue = [];
+  let resolveQueue = [];
 
   /** @type {boolean} */
   let development = true;
@@ -549,9 +549,28 @@
     );
   }
 
-  /** @param {KiiObject} object */
-  function kiiShiftQueueobject() {
-    // TODO: implement message queuing, for the purpose of avoiding too many simultaneous connection
+  function kiiShiftQueue() {
+    let f = funcQueue.shift();
+    return f ? f.func(f.arg).then(result => {
+      return (resolveQueue.shift().resolve(result));
+    }, error => {
+      return (resolveQueue.shift().reject(error));
+    }).then(kiiShiftQueue) : Promise.resolve();
+  }
+
+  function kiiPushQueue(func, arg) {
+    return new Promise((resolve, reject) => {
+      funcQueue.push({ func: func, arg: arg });
+      resolveQueue.push({ resolve: resolve, reject: reject });
+      if(resolveQueue.length === 1)
+        kiiShiftQueue();
+    })
+  }
+
+  function kiiPutObjectWithACL(object) {
+    return object.save().then(obj => {
+      return kiiLimitObjectACL(obj);
+    });
   }
 
   /** @param {KiiObject} data */
@@ -566,9 +585,7 @@
       msg.set(k, data[k]);
     });
     msg.set('uid', user.getID());
-    return msg.save().then(obj => {
-      return kiiLimitObjectACL(obj);
-    }).then(() => {
+    return kiiPushQueue(kiiPutObjectWithACL, msg).then(() => {
       return msg;
     });
   }
@@ -816,7 +833,7 @@
             pendingRequests.splice(i, 1);
           break;
         default:
-          console.log(body.type, body.sourceURI);
+          // console.log(body.type, body.sourceURI);
           break;
         }
       });
@@ -918,7 +935,7 @@
             userName: friend.get('userName'),
             status: friend.get('status')
           });
-        }, e=>{console.error(e);});
+        });
       }
       else
         return group.refresh().then(g => {
@@ -1014,7 +1031,7 @@
     .then(() => {
       if(!ping)
         ping = setInterval(kiiPing, 5000);
-    }).catch(e=>{console.error(e);});
+    });
   }
 
   function kiiSetOffline() {
