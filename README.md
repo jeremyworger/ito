@@ -56,6 +56,8 @@ Node.js with the following features:
 
 ### Kii Cloud
 
+Note: *Node.js is required to initialize a Kii Cloud application.*
+
 1. Create your app at [Kii Developer Portal](https://developer.kii.com).
     * Choose HTML5 as your application's platform.
     * Choose a server location appropriate for you.
@@ -64,16 +66,20 @@ Node.js with the following features:
 2. Configure social network settings (if needed).
     * For detailed information, please refer to
     http://docs.kii.com/en/guides/cloudsdk/javascript/managing-users/social-network-integration/.
-3. Create a bucket named `ito` in the app's application scope and edit its ACL as following:
-    * "Create Objects in Bucket": only granted to "Any Authenticated User"
-    * "Query Objects in Bucket": only granted to "Any Authenticated User"
-    * "Drop Bucket With All Content": not granted (to any users)
-    * "Read Objects in Bucket": not granted (to any users)
-4. Confirm your APP ID, APP KEY, CLIENT ID and CLIENT SECRET.
+3. Confirm your APP ID, APP KEY, CLIENT ID and CLIENT SECRET.
     * These values are used to deploy Server Code. (see 5.)
     * The values of APP ID and APP KEY are used in `ito.init()`.
     * For detailed information, please refer to
     http://docs.kii.com/en/guides/cloudsdk/javascript/quickstart/create-app/#checking-appid-and-appkey.
+4. Execute `etc/kii-init.js` on your shell (Terminal, etc.), as follows:
+    ```bash
+    $ node etc/kii-init.js \
+      --site [us|eu|cn3|sg|jp] \
+      --app-id <your_app_id> \
+      --app-key <your_app_key> \
+      --client-id <your_client_id> \
+      --client-secret <your_client_secret>
+    ```
 5. Deploy `etc/kii-server-code.js` as Server Code with `etc/kii-server-hook.json' as Server hook
     Configuration File, by using
     [Command Line Tools](http://docs.kii.com/en/guides/commandlinetools/). For example:
@@ -88,33 +94,35 @@ Node.js with the following features:
       --hook-config etc/kii-server-hook.json
     ```
 
-# How to run
-
-## Loading the library on your application
+# How to load **ito** library in your application
 
 Note: You can modify paths of scripts according to your environment.
 
-### Browsers
+## Browsers
 
-#### Firebase
+### Firebase
 
 ```html
 <script src="src/ito.js"></script>
 <script src="src/ito-firebase.js"></script>
 ```
 
-#### Kii Cloud
+### Kii Cloud
 
 ```html
 <script src="src/ito.js"></script>
 <script src="src/ito-kii.js"></script>
 ```
 
-### Node.js
+## Node.js
+
+On your shell (Terminal, etc.),
 
 ```bash
 $ npm install ito --save
 ```
+
+In your web application,
 
 ```js
 let ito = require('ito');

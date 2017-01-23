@@ -149,7 +149,7 @@
         // Node.js
         else {
           let kii = require('kii-cloud-sdk').create();
-          Object.keys(kii).forEach(i=> { self[i] = kii[i]; });
+          Object.keys(kii).forEach(i => { self[i] = kii[i]; });
           self.mqtt = require('mqtt');
           return Promise.resolve();
         }
