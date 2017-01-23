@@ -160,7 +160,7 @@ return Kii.authenticateAsAppAdmin(clientId, clientSecret).then(a => {
     }
   ]);
 }).then(() => {
-  itoNotification = admin.bucketWithName('itonotification');
+  itoNotification = admin.bucketWithName('itonotifications');
   const query = KiiQuery.queryWithClause(KiiClause.equals('type', 'lastupdated'));
   return ito.executeQuery(query);
 }).then(params => {

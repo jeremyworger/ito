@@ -104,7 +104,7 @@ function kiiRemovePendingRequests(admin, uris) {
     }));
 }
 
-function parseItoMessage(params, context, done) {
+function restrictItoMessage(params, context, done) {
   /** @type {KiiAppAdminContext} */
   var admin = context.getAppAdminContext();
   var object = admin.objectWithURI(params.uri);
@@ -151,6 +151,7 @@ function parseItoMessage(params, context, done) {
         return object.delete();
       break;
     case 'administrators':
+    case 'lastupdated':
       return object.delete();
       break;
     }

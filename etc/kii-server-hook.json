@@ -3,7 +3,14 @@
     {
       "when": "DATA_OBJECT_CREATED",
       "what": "EXECUTE_SERVER_CODE",
-      "endpoint": "parseItoMessage"
+      "endpoint": "restrictItoMessage"
+    }
+  ],
+  "kiicloud://buckets/itonotifications": [
+    {
+      "when": "DATA_OBJECT_CREATED",
+      "what": "EXECUTE_SERVER_CODE",
+      "endpoint": "restrictItoMessage"
     }
   ],
   "kiicloud://scheduler": {
