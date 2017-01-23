@@ -67,7 +67,8 @@ Note: *Node.js is required to initialize a Kii Cloud application.*
     * For detailed information, please refer to
     http://docs.kii.com/en/guides/cloudsdk/javascript/managing-users/social-network-integration/.
 3. Confirm your APP ID, APP KEY, CLIENT ID and CLIENT SECRET.
-    * These values are used to deploy Server Code. (see 5.)
+    * These values are required to initialize your Kii Cloud application (see 4.) and
+    deploy Server Code (see 5.).
     * The values of APP ID and APP KEY are used in `ito.init()`.
     * For detailed information, please refer to
     http://docs.kii.com/en/guides/cloudsdk/javascript/quickstart/create-app/#checking-appid-and-appkey.

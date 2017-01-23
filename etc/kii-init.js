@@ -101,6 +101,28 @@ return Kii.authenticateAsAppAdmin(clientId, clientSecret).then(a => {
     object.set('administrators', []);
     return object.save();
   }
+  else
+    return params[1][0];
+}).then(object => {
+  return kiiSetACLEntries(object, [
+    {
+      subject: new KiiAnyAuthenticatedUser(),
+      action: KiiACLAction.KiiACLObjectActionRead,
+      granted: false
+    }, {
+      subject: new KiiAnonymousUser(),
+      action: KiiACLAction.KiiACLObjectActionRead,
+      granted: false
+    }, {
+      subject: new KiiAnyAuthenticatedUser(),
+      action: KiiACLAction.KiiACLObjectActionWrite,
+      granted: true
+    }, {
+      subject: new KiiAnonymousUser(),
+      action: KiiACLAction.KiiACLObjectActionWrite,
+      granted: false
+    }
+  ]);
 }).then(() => {
   return kiiSetACLEntries(ito, [
     {
@@ -147,6 +169,28 @@ return Kii.authenticateAsAppAdmin(clientId, clientSecret).then(a => {
     object.set('type', 'lastupdated');
     return object.save();
   }
+  else
+    return params[1][0];
+}).then(object => {
+  return kiiSetACLEntries(object, [
+    {
+      subject: new KiiAnyAuthenticatedUser(),
+      action: KiiACLAction.KiiACLObjectActionRead,
+      granted: false
+    }, {
+      subject: new KiiAnonymousUser(),
+      action: KiiACLAction.KiiACLObjectActionRead,
+      granted: false
+    }, {
+      subject: new KiiAnyAuthenticatedUser(),
+      action: KiiACLAction.KiiACLObjectActionWrite,
+      granted: true
+    }, {
+      subject: new KiiAnonymousUser(),
+      action: KiiACLAction.KiiACLObjectActionWrite,
+      granted: false
+    }
+  ]);
 }).then(() => {
   return kiiSetACLEntries(itoNotification, [
     {
@@ -187,14 +231,14 @@ return Kii.authenticateAsAppAdmin(clientId, clientSecret).then(a => {
   console.error(err);
 });
 
-function kiiSetACLEntries(bucket, entries) {
+function kiiSetACLEntries(target, entries) {
   return entries.reduce((r, e) => {
-    return r.then(() => { return kiiSetACLEntry(bucket, e.subject, e.action, e.granted); });
+    return r.then(() => { return kiiSetACLEntry(target, e.subject, e.action, e.granted); });
   }, Promise.resolve());
 }
 
-function kiiSetACLEntry(bucket, subject, action, granted) {
-  let acl = bucket.acl();
+function kiiSetACLEntry(target, subject, action, granted) {
+  let acl = (target.acl || target.objectACL)();
   let entry = KiiACLEntry.entryWithSubject(subject, action);
   entry.setGrant(granted);
   acl.putACLEntry(entry);
