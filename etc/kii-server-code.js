@@ -1,4 +1,6 @@
 function kiiAddACLEntry(object, scope, action, grant) {
+  if(!(object instanceof KiiObject))
+    return;
   var acl = (object.objectACL || object.acl)();
   var entry = KiiACLEntry.entryWithSubject(scope, action);
   entry.setGrant(grant);
@@ -7,6 +9,8 @@ function kiiAddACLEntry(object, scope, action, grant) {
 }
 
 function kiiSetAppScopeObjectACL(object) {
+  if(!(object instanceof KiiObject))
+    return;
   return kiiAddACLEntry(
     object,
     new KiiAnyAuthenticatedUser(),
@@ -30,6 +34,8 @@ function kiiSetAppScopeObjectACL(object) {
 }
 
 function kiiSetGroupScopeObjectACL(object, group) {
+  if(!(object instanceof KiiObject))
+    return;
   return kiiAddACLEntry(
     object,
     group,
@@ -46,6 +52,8 @@ function kiiSetGroupScopeObjectACL(object, group) {
 }
 
 function kiiSearchFriendsGroup(admin, uid, type) {
+  if(!(admin instanceof KiiAppAdminContext))
+    return;
   var q = KiiQuery.queryWithClause(KiiClause.and(
     KiiClause.equals('_owner', uid),
     KiiClause.equals('type', type)
@@ -57,6 +65,8 @@ function kiiSearchFriendsGroup(admin, uid, type) {
 }
 
 function kiiSearchObjectsInBucket(admin, type, value) {
+  if(!(admin instanceof KiiAppAdminContext))
+    return;
   var b = admin.bucketWithName('ito');
   var q = KiiQuery.queryWithClause(KiiClause.and(
     KiiClause.equals('type', type),
@@ -68,6 +78,8 @@ function kiiSearchObjectsInBucket(admin, type, value) {
 }
 
 function kiiSetOffline(object) {
+  if(!(object instanceof KiiObject))
+    return;
   object.set('status', 'offline');
   return object.save();
 }
@@ -77,6 +89,8 @@ function kiiSetOffline(object) {
  * @param {Array<string>} uris
  */
 function kiiRemovePendingRequests(admin, uris) {
+  if(!(admin instanceof KiiAppAdminContext))
+    return;
   if(!$.isArray(uris))
     return Promise.resolve();
   else
@@ -135,6 +149,9 @@ function parseItoMessage(params, context, done) {
         });
       else
         return object.delete();
+      break;
+    case 'administrators':
+      return object.delete();
       break;
     }
   }).then(function() {
