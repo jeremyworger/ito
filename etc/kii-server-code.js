@@ -33,6 +33,24 @@ function kiiSetAppScopeObjectACL(object) {
   });
 }
 
+function kiiSetNotificationACL(object) {
+  if(!(object instanceof KiiObject))
+    return;
+  return kiiAddACLEntry(
+    object,
+    new KiiAnonymousUser(),
+    KiiACLAction.KiiACLObjectActionRead,
+    false
+  ).then(function() {
+    return kiiAddACLEntry(
+      object,
+      new KiiAnyAuthenticatedUser(),
+      KiiACLAction.KiiACLObjectActionWrite,
+      false
+    );
+  });
+}
+
 function kiiSetGroupScopeObjectACL(object, group) {
   if(!(object instanceof KiiObject))
     return;
@@ -151,7 +169,6 @@ function restrictItoMessage(params, context, done) {
         return object.delete();
       break;
     case 'administrators':
-    case 'lastupdated':
       return object.delete();
       break;
     }
@@ -179,7 +196,7 @@ function setPasscode(params, context, done) {
       if(!p || p === '') {
         q = KiiQuery.queryWithClause(KiiClause.equals('type', 'passcode'));
         b = Kii.bucketWithName('ito');
-        b.executeQuery(q).then(function(params) {
+        return b.executeQuery(q).then(function(params) {
           (params[1].length !== 0 ? params[1][0].delete() : Promise.resolve()).then(function() {
             done({
               result: 'ok',
@@ -194,7 +211,7 @@ function setPasscode(params, context, done) {
           KiiClause.equals('passcode', p),
           KiiClause.notEquals('_owner', user.getID())
         ));
-        b.executeQuery(q).then(function(params) {
+        return b.executeQuery(q).then(function(params) {
           if(params[1].length > 0)
             done({
               result: 'error',
@@ -203,7 +220,7 @@ function setPasscode(params, context, done) {
           else {
             b = Kii.bucketWithName('ito');
             q = KiiQuery.queryWithClause(KiiClause.equals('type', 'passcode'));
-            b.executeQuery(q).then(function(params) {
+            return b.executeQuery(q).then(function(params) {
               var f = (params[1].length === 0);
               var o = f ? b.createObject() : params[1][0];
               o.set('type', 'passcode');
@@ -342,7 +359,7 @@ function rejectRequest(params, context, done) {
 
   /** @type {KiiAppAdminContext} */
   var admin = context.getAppAdminContext();
-  KiiUser.authenticateWithToken(context.getAccessToken()).then(function(user) {
+  return KiiUser.authenticateWithToken(context.getAccessToken()).then(function(user) {
     return kiiSearchFriendsGroup(admin, u, 'email').then(function(group) {
       if(group) {
         var g = admin.groupWithID(group);
@@ -383,14 +400,14 @@ function removePendingRequests(params, context, done) {
 }
 
 function onOffline(params, context, done) {
-  KiiUser.authenticateWithToken(context.getAccessToken()).then(function(user) {
+  return KiiUser.authenticateWithToken(context.getAccessToken()).then(function(user) {
     var b = Kii.bucketWithName('ito');
     var q = KiiQuery.queryWithClause(KiiClause.and(
       KiiClause.equals('_owner', user.getID()),
       KiiClause.equals('type', 'email')
     ));
     var u = params.pendingRequests;
-    b.executeQuery(q).then(function(params) {
+    return b.executeQuery(q).then(function(params) {
       if(params[1].length > 0) {
         kiiSetOffline(params[1][0]).then(function(obj) {
           var g = KiiGroup.groupWithID(obj.get('group'));
@@ -431,7 +448,7 @@ function checkPing(params, context, done) {
     KiiClause.equals('status', 'online'),
     KiiClause.lessThan('_modified', Date.now() - 15000)
   ));
-  b.executeQuery(q).then(function(params) {
+  return b.executeQuery(q).then(function(params) {
     return Promise.all(params[1].map(function(/** @type {KiiObject} */obj) {
       var g = obj.get('group');
       console.log('   ' + g + ': ' + obj.getModified() + ' / ' + Date.now() + ' / ' + (Date.now() - parseInt(obj.getModified())));
@@ -444,4 +461,68 @@ function checkPing(params, context, done) {
       });
     })).then(done);
   }).catch(done);
+}
+
+function clearOldNotifications(params, context, done) {
+  var admin = context.getAppAdminContext();
+  var b = admin.bucketWithName('itonotifications');
+  var q = KiiQuery.queryWithClause(KiiClause.and(
+    KiiClause.equals('rel', 'notification'),
+    KiiClause.equals('type', 'notification'),
+    KiiClause.lessThan('_modified', Date.now() - 14*24*60*60*1000)
+  ));
+  return b.executeQuery(q).then(function(params) {
+    return params[1].reduce(function(p, e) {
+      return p.then(function() { return e.delete(); });
+    }, Promise.resolve()).then(done);
+  }).catch(done);
+}
+
+function sendNotification(params, context, done) {
+  return KiiUser.authenticateWithToken(context.getAccessToken()).then(function(user) {
+    /** @type {KiiAppAdminContext} */
+    var admin = context.getAppAdminContext();
+    var b = admin.bucketWithName('ito');
+    var q = KiiQuery.queryWithClause(KiiClause.equals('type', 'administrators'));
+    var d = params.data;
+    return b.executeQuery(q).then(function(params) {
+      if(params[1].length > 0 && params[1][0].get('administrators').indexOf(user.getID()) >= 0) {
+        b = admin.bucketWithName('itonotifications');
+        var obj = b.createObject();
+        obj.set('rel', 'notification');
+        obj.set('type', 'notification');
+        obj.set('data', d);
+        obj.save().then(kiiSetNotificationACL).then(function() {
+          done({ result: 'ok' });
+        })
+      }
+      else
+        throw null;
+    });
+  }).catch(function() {
+    done({
+      result: 'error',
+      reason: 'failed to invoke Server Code'
+    });
+  });
+}
+
+function checkAdministrator(params, context, done) {
+  return KiiUser.authenticateWithToken(context.getAccessToken()).then(function(user) {
+    /** @type {KiiAppAdminContext} */
+    var admin = context.getAppAdminContext();
+    var b = admin.bucketWithName('ito');
+    var q = KiiQuery.queryWithClause(KiiClause.equals('type', 'administrators'));
+    return b.executeQuery(q).then(function(params) {
+      done({
+        result: 'ok',
+        isAdmin: (params[1].length > 0 && params[1][0].get('administrators').indexOf(user.getID()) >= 0)
+      });
+    });
+  }).catch(function() {
+    done({
+      result: 'error',
+      reason: 'failed to invoke Server Code'
+    });
+  });
 }

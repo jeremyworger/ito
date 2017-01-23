@@ -172,25 +172,7 @@ return Kii.authenticateAsAppAdmin(clientId, clientSecret).then(a => {
   else
     return params[1][0];
 }).then(object => {
-  return kiiSetACLEntries(object, [
-    {
-      subject: new KiiAnyAuthenticatedUser(),
-      action: KiiACLAction.KiiACLObjectActionRead,
-      granted: false
-    }, {
-      subject: new KiiAnonymousUser(),
-      action: KiiACLAction.KiiACLObjectActionRead,
-      granted: false
-    }, {
-      subject: new KiiAnyAuthenticatedUser(),
-      action: KiiACLAction.KiiACLObjectActionWrite,
-      granted: true
-    }, {
-      subject: new KiiAnonymousUser(),
-      action: KiiACLAction.KiiACLObjectActionWrite,
-      granted: false
-    }
-  ]);
+  return object.delete();
 }).then(() => {
   return kiiSetACLEntries(itoNotification, [
     {

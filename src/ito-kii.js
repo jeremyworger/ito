@@ -28,15 +28,16 @@
   /*
    * Global variables
    */
-  const KII_LOGIN_TYPE     = 'ito.provider.kii.login.type';
-  const KII_LOGIN_TOKEN    = {
+  const KII_LOGIN_TYPE           = 'ito.provider.kii.login.type';
+  const KII_LOGIN_TOKEN          = {
     anonymous: 'ito.provider.kii.loginToken.anonymous',
     email:     'ito.provider.kii.loginToken.email'
   };
-  const KII_GROUP_FRIENDS  = 'itofriends';
-  const KII_BUCKET         = 'ito';
-  const KII_BUCKET_FRIENDS = KII_GROUP_FRIENDS;
-  const KII_BUCKET_PROFILE = 'itoprofile';
+  const KII_GROUP_FRIENDS        = 'itofriends';
+  const KII_BUCKET               = 'ito';
+  const KII_BUCKET_NOTIFICATIONS = 'itonotifications';
+  const KII_BUCKET_FRIENDS       = KII_GROUP_FRIENDS;
+  const KII_BUCKET_PROFILE       = 'itoprofile';
 
   let appId = null;
 
@@ -44,6 +45,8 @@
   let friendsGroup = null;
   /** @type {?KiiBucket} */
   let itoBucket = null;
+  /** @type {?KiiBucket} */
+  let notificationBucket = null;
   /** @type {?KiiBucket} */
   let friendsBucket = null;
   /** @type {?KiiBucket} */
@@ -350,13 +353,28 @@
      * Kii Cloud: Chat Messages
      */
     sendMessage(uid, msg) {
-      let user = getUser();
       return kiiPutMessageObject(uid, {
         rel: 'message',
         type: 'message',
         data: msg
       }).then(obj => {
         return { uid: uid, messageKey: kiiObjectURIToKey(obj) };
+      });
+    }
+
+    /*
+     * KiiCloud: Notifications
+     */
+    sendNotification(msg) {
+      return kiiPushQueue(kiiPutServerCodeEntry, {
+        entry: 'sendNotification',
+        argument: { data: msg }
+      }).then(result => {
+        let r = result[2].getReturnedValue().returnedValue;
+        if(r.result === 'ok')
+          return;
+        else
+          throw new Error('the current user is not permitted to send a notification');
       });
     }
 
@@ -664,11 +682,7 @@
       return Promise.resolve();
     let bucket = friendsRef[uid].profileBucket;
     let user = getUser();
-    return user.pushSubscription().isSubscribed(bucket).then(params => {
-      if (params[2]) {
-        return user.pushSubscription().unsubscribe(bucket);
-      }
-    });
+    return kiiUnsubscribePush(bucket);
   }
 
   function kiiCheckAll() {
@@ -706,7 +720,15 @@
       return friendsBucket.executeQuery(KiiQuery.queryWithClause());
     }).then(params => {
       return Promise.all(params[1].map(obj => { return kiiDispatchNewObject(obj); }));
-    });
+    }).then(() => {
+      let query = KiiQuery.queryWithClause(KiiClause.and(
+        KiiClause.equals('rel', 'notification'),
+        KiiClause.equals('type', 'notification')
+      ));
+      return notificationBucket.executeQuery(query);
+    }).then(params => {
+      provider.onNotification(params[1].map(obj => { return obj.get('data'); }));
+    })
   }
 
   function kiiRefreshAll() {
@@ -789,6 +811,9 @@
     switch(object.get('rel')) {
     case 'message':
       kiiDispatchMessageObject(object);
+      break;
+    case 'notification':
+      kiiDispatchNotificationObject(object);
       break;
     case 'signaling':
       kiiDispatchSignalingObject(object);
@@ -1005,11 +1030,39 @@
       kiiResetPing();
   }
 
+  function kiiSubscribePush(target) {
+    let user = getUser();
+    return user.pushSubscription().isSubscribed(target).then(params => {
+      if(!params[2])
+        return user.pushSubscription().subscribe(target);
+    });
+  }
+
+  function kiiUnsubscribePush(target) {
+    let user = getUser();
+    return user.pushSubscription().isSubscribed(target).then(params => {
+      if(params[2])
+        return user.pushSubscription().unsubscribe(target);
+    });
+  }
+
+  function kiiCheckAdministrator() {
+    return kiiPushQueue(kiiPutServerCodeEntry, {
+      entry: 'checkAdministrator',
+      argument: { a: 0 }
+    }).then(result => {
+      let r = result[2].getReturnedValue().returnedValue;
+      if(r.result === 'ok')
+        isAdmin = r.isAdmin;
+    });
+  }
+
   function kiiOnOnline() {
     let user = getUser();
     let query = KiiQuery.queryWithClause(KiiClause.equals('_owner', user.getID()));
     return kiiInitMqttClient().then(kiiInitGroup).then(() => {
       itoBucket = Kii.bucketWithName(KII_BUCKET);
+      notificationBucket = Kii.bucketWithName(KII_BUCKET_NOTIFICATIONS);
       friendsBucket = friendsGroup.bucketWithName(KII_BUCKET_FRIENDS);
       profileBucket = friendsGroup.bucketWithName(KII_BUCKET_PROFILE);
       return profileBucket.executeQuery(query);
@@ -1025,10 +1078,11 @@
       if(!profileRef)
         return kiiInitProfileRef();
     }).then(() => {
-      return user.pushSubscription().isSubscribed(friendsBucket);
-    }).then(params => {
-      if(!params[2])
-        return user.pushSubscription().subscribe(friendsBucket);
+      return kiiSubscribePush(friendsBucket);
+    }).then(() => {
+      return kiiSubscribePush(notificationBucket);
+    }).then(() => {
+      return kiiCheckAdministrator();
     }).then(() => {
       return itoBucket.executeQuery(query);
     }).then(params => {
@@ -1120,7 +1174,19 @@
   }
 
   /*
-   * Firebase Database: WebRTC Signaling Messages
+   * Kii Cloud: Notifictaions
+   */
+  function kiiDispatchNotificationObject(object) {
+    let uid = object.get('uid');
+    switch(object.get('type')) {
+    case 'notification':
+      provider.onNotification([object.get('data')]);
+      break;
+    }
+  }
+
+  /*
+   * Kii Cloud: WebRTC Signaling Messages
    */
   /** @param {KiiObject} object */
   function kiiDispatchSignalingObject(object) {

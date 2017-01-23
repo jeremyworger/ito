@@ -6,17 +6,15 @@
       "endpoint": "restrictItoMessage"
     }
   ],
-  "kiicloud://buckets/itonotifications": [
-    {
-      "when": "DATA_OBJECT_CREATED",
-      "what": "EXECUTE_SERVER_CODE",
-      "endpoint": "restrictItoMessage"
-    }
-  ],
   "kiicloud://scheduler": {
     "check_ping": {
       "cron": "0/1 * * * *",
       "endpoint": "checkPing",
+      "what": "EXECUTE_SERVER_CODE"
+    },
+    "clear_old_notifications": {
+      "cron": "0/1 * * * *",
+      "endpoint": "clearOldNotifications",
       "what": "EXECUTE_SERVER_CODE"
     }
   }
