@@ -164,7 +164,7 @@
         appId = !!arg && arg.appId;
         Kii.initializeWithSite(appId, arg.appKey, KiiSite[arg.serverLocation]);
         let type = localStorage.getItem(KII_LOGIN_TYPE);
-        let token = localStorage.getItem(KII_LOGIN_TOKEN[type]);
+        let token = type ? localStorage.getItem(KII_LOGIN_TOKEN[type]) : null;
         if(token)
           KiiUser.authenticateWithToken(token)
             .then(kiiGetProfile)
@@ -257,22 +257,27 @@
       if(passcode === pass)
         return Promise.resolve();
       else if(!pass) 
-        return kiiResetPasscodeRef();
+        return kiiPushQueue(kiiResetPasscodeRef);
       else {
-        passcode = pass;
-        return kiiSetPasscodeRef();
+        return kiiPushQueue(p => {
+          passcode = p;
+          return kiiSetPasscodeRef();
+        }, pass);
       }
     }
 
     sendRequest(m, opt) {
       return new Promise((resolve, reject) => {
         let user = getUser();
-        Kii.serverCodeEntry('sendRequest').execute({
-          query: m,
-          uid: user.getID(),
-          userName: userName,
-          email: email,
-          options: opt
+        kiiPushQueue(kiiPutServerCodeEntry, {
+          entry: 'sendRequest',
+          argument: {
+            query: m,
+            uid: user.getID(),
+            userName: userName,
+            email: email,
+            options: opt
+          }
         }).then(result => {
           let r = result[2].getReturnedValue().returnedValue;
           if(r.result === 'ok')
@@ -285,7 +290,7 @@
 
     dropRequest(key, usePasscode) {
       let object = KiiObject.objectWithURI(key.replace(/^(.*)\/(.*)$/, 'kiicloud://groups/$1/buckets/itofriends/$2'));
-      return object.delete();
+      return kiiPushQueue(object.delete);
     }
 
     acceptRequest(key, m, uid, usePasscode) {
@@ -302,7 +307,10 @@
           arg.passcode = passcode;
         return usePasscode ? kiiResetPasscodeRef() : Promise.resolve();
       }).then(() => {
-        Kii.serverCodeEntry('acceptRequest').execute(arg).catch(() => {});
+        return kiiPushQueue(kiiPutServerCodeEntry, {
+          entry: 'acceptRequest',
+          argument: arg
+        }).catch(() => {});
       });
     }
 
@@ -316,7 +324,10 @@
         arg.passcode = passcode;
       else
         arg.email = email;
-      return Kii.serverCodeEntry('rejectRequest').execute(arg).catch(() => {});
+      return kiiPushQueue(kiiPutServerCodeEntry, {
+        entry: 'rejectRequest',
+        argument: arg
+      }).catch(() => {});
     }
 
     sendRemove(uid, m) {
@@ -328,9 +339,7 @@
           let msg = bucket.createObject();
           msg.set('type', 'remove');
           msg.set('uid', user.getID());
-          msg.save().then(obj => {
-            return kiiLimitObjectACL(obj);
-          });
+          return kiiPushQueue(kiiPutObjectWithACL, msg);
         }).then(() => {
           provider.onRemoveFriend(uid);
         })
@@ -550,12 +559,16 @@
   }
 
   function kiiShiftQueue() {
-    let f = funcQueue.shift();
-    return f ? f.func(f.arg).then(result => {
-      return (resolveQueue.shift().resolve(result));
-    }, error => {
-      return (resolveQueue.shift().reject(error));
-    }).then(kiiShiftQueue) : Promise.resolve();
+    if(isOnline) {
+      let f = funcQueue.shift();
+      return f ? f.func(f.arg).then(result => {
+        return (resolveQueue.shift().resolve(result));
+      }, error => {
+        return (resolveQueue.shift().reject(error));
+      }).then(kiiShiftQueue) : Promise.resolve()
+    }
+    else
+      return Promise.resolve();
   }
 
   function kiiPushQueue(func, arg) {
@@ -565,6 +578,10 @@
       if(resolveQueue.length === 1)
         kiiShiftQueue();
     })
+  }
+
+  function kiiPutServerCodeEntry(arg) {
+    return Kii.serverCodeEntry(arg.entry).execute(arg.argument);
   }
 
   function kiiPutObjectWithACL(object) {
@@ -816,25 +833,27 @@
         let body = JSON.parse(message.toString());
         let object = KiiObject.objectWithURI(body.sourceURI);
         let i;
-        switch(body.type) {
-        case 'DATA_OBJECT_CREATED':
-          object.refresh().then(obj => {
-            kiiDispatchNewObject(obj);
-          });
-          break;
-        case 'DATA_OBJECT_UPDATED':
-          object.refresh().then(obj => {
-            kiiDispatchUpdatedObject(obj);
-          });
-          break;
-        case 'DATA_OBJECT_DELETED':
-          i = pendingRequests.indexOf(object.objectURI());
-          if(i >= 0)
-            pendingRequests.splice(i, 1);
-          break;
-        default:
-          // console.log(body.type, body.sourceURI);
-          break;
+        // Note: ito does not currently use Push-to-User notification,
+        //       for the purpose of ensuring compatibility with Firebase
+        //       and better offline support.
+        if(!body.sourceURI.match(/^kiicloud:\/.*\/topics\//)) {
+          switch(body.type) {
+          case 'DATA_OBJECT_CREATED':
+            object.refresh().then(obj => {
+              kiiDispatchNewObject(obj);
+            });
+            break;
+          case 'DATA_OBJECT_UPDATED':
+            object.refresh().then(obj => {
+              kiiDispatchUpdatedObject(obj);
+            });
+            break;
+          case 'DATA_OBJECT_DELETED':
+            i = pendingRequests.indexOf(object.objectURI());
+            if(i >= 0)
+              pendingRequests.splice(i, 1);
+            break;
+          }
         }
       });
     });
@@ -952,13 +971,13 @@
 
   function kiiAddFriend(uid) {
     friendsGroup.addUser(KiiUser.userWithID(uid));
-    return friendsGroup.save();
+    return kiiPushQueue(friendsGroup.save);
   }
 
   function kiiRemoveFriend(uid) {
     return kiiResetFriendRef(uid).then(() => {
       friendsGroup.removeUser(KiiUser.userWithID(uid));
-      return friendsGroup.save();
+    return kiiPushQueue(friendsGroup.save);
     });
   }
 
@@ -1025,7 +1044,7 @@
         }
       });
     }).then(() => {
-      return passcode ? kiiSetPasscodeRef() : kiiResetPasscodeRef();
+      return kiiPushQueue( passcode ? kiiSetPasscodeRef : kiiResetPasscodeRef );
     }).then(kiiSetEmailRef)
     .then(kiiCheckAll)
     .then(() => {
@@ -1152,6 +1171,7 @@
       isOnline = true;
       kiiRefreshAll();
       kiiSetPing();
+      kiiShiftQueue();
     });
 
     window.addEventListener('offline', () => {
@@ -1169,4 +1189,4 @@
 
   if(!isBrowser)
     module.exports = self.ito;
-})(this, typeof window === 'object');
+})((typeof window === 'object' ? window : global), typeof window === 'object');

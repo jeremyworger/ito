@@ -1123,10 +1123,10 @@
   });
 
   if (!isBrowser) {
-    self.ito.ItoProvider = ItoProvider;
+    self.ito.ItoProvider = self.ItoProvider;
     module.exports = {
       ito: self.ito,
       localStorage: self.localStorage
     };
   }
-})(this, typeof window === 'object');
+})((typeof window === 'object' ? window : global), typeof window === 'object');
