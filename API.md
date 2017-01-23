@@ -200,6 +200,24 @@ the *administrators* node, like below:
  | + (the user's uid) : true
 ```
 
+### Kii Cloud
+
+To register a user as an administrator,
+
+1. Open your application dashboard on Kii Developer Portal.
+2. Go to *Objects* page, and open *Data Browser* tab.
+3. Select *Application Scope* and open *ito* bucket.
+4. Find an object in the bucket which has the member `type` with value `administrators`.
+5. Add the user's uid in an array as `administrators` member in the object, as follows:
+    ```
+    {
+      "type": "administrators",
+      "administrators": [
+        "(Please add the user's uid here)"
+      ]
+    }
+    ```
+
 ## Send a message to a friend
 ```js
 ito.send('(friend\'s uid)', '(message)');
