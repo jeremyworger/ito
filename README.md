@@ -71,7 +71,7 @@ Note: *Node.js is required to initialize a Kii Cloud application.*
     * The values of APP ID and APP KEY are used in `ito.init()`.
     * For detailed information, please refer to
     http://docs.kii.com/en/guides/cloudsdk/javascript/quickstart/create-app/#checking-appid-and-appkey.
-4. Execute `etc/kii-init.js` on your shell (Terminal, etc.), as follows:
+4. Run the script `etc/kii-init.js` by Node.js on your shell (Terminal, etc.), as follows:
     ```bash
     $ node etc/kii-init.js \
       --site [us|eu|cn3|sg|jp] \
