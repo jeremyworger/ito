@@ -509,7 +509,7 @@
       });
     }
 
-    removeDataStore(scope, name) {
+    removeDataStore(name) {
       let user = getUser();
       let dataRef = firebase.database().ref(
         'datastore/' + user.uid + '/' + name);
@@ -520,23 +520,26 @@
       });
     }
 
-    putDataElement(scope, name, key, data) {
+    putDataElement(name, key, data) {
       let user = getUser();
       let ref = firebase.database().ref(
         'datastore/' + user.uid + '/' + name + '/' + key);
       return ref.set(data);
     }
 
-    getDataElement(scope, name, key) {
+    getDataElement(name, key) {
       let user = getUser();
       let ref = firebase.database().ref(
         'datastore/' + user.uid + '/' + name + '/' + key);
       return ref.once('value').then(data => {
-        return { key: data.key, data: data.val() };
+        if(data)
+          return { key: data.key, data: data.val() };
+        else
+          throw new Error('no such key in the data store');
       });
     }
 
-    getAllDataElements(scope, name) {
+    getAllDataElements(name) {
       let user = getUser();
       let ref = firebase.database().ref(
         'datastore/' + user.uid + '/' + name);
@@ -545,14 +548,14 @@
       });
     }
 
-    removeDataElement(scope, name, key) {
+    removeDataElement(name, key) {
       let user = getUser();
       let ref = firebase.database().ref(
         'datastore/' + user.uid + '/' + name + '/' + key);
       return ref.remove();
     }
 
-    removeAllDataElements(scope, name) {
+    removeAllDataElements(name) {
       let user = getUser();
       let ref = firebase.database().ref('datastore/' + user.uid + '/' + name);
       return ref.remove();

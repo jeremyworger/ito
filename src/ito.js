@@ -87,6 +87,7 @@
     constructor(parent) {
       this.signIn = {};
       this.parent = parent;
+      Object.defineProperty(this, 'parent', { enumerable: false });
     }
 
     /*
@@ -433,6 +434,16 @@
   class Ito extends ItoEmitter {
     constructor() {
       super();
+      this.profile = {};
+      Object.defineProperties(this, {
+        state: { get: () => { return state; } },
+        profile: { get: () => { return profile; } },
+        passcode: { get: () => { return provider.getPasscode(); } },
+        peerConnectionOptions: {
+          get: () => { return pcOpt; },
+          set: opt => { if (opt instanceof Object) pcOpt = Object.assign(pcOpt); }
+        }
+      });
     }
 
     /*
@@ -587,7 +598,9 @@
     openDataStore(name, opt) {
       let scope = 'private';
       if (opt) {
-        if (typeof opt.scope === 'string' && opt.scope.match(/^(public|friends|private)$/))
+        if(typeof name !== 'string' || !name.match(/^[\w\.-]{2,32}$/))
+          throw new Error('data store name must be 2-32 letters of alphabet, number, underscore, period and/or minus.');
+        else if (typeof opt.scope === 'string' && opt.scope.match(/^(public|friends|private)$/))
           scope = opt.scope;
         else
           throw new Error('the "scope" option must be "public", "friends" or "private".');
@@ -1024,13 +1037,13 @@
     put(key, data) {
       if (!this.scope)
         return Promise.reject(new Error('the data store is already reset.'));
-      return provider.putDataElement(this.scope, this.name, key, data);
+      return provider.putDataElement(this.name, key, data);
     }
 
     get(key) {
       if (!this.scope)
         return Promise.reject(new Error('the data store is already reset.'));
-      return provider.getDataElement(this.scope, this.name, key).then(result => {
+      return provider.getDataElement(this.name, key).then(result => {
         return new ItoDataElement(this, result.key, result.data);
       });
     }
@@ -1038,31 +1051,31 @@
     getAll() {
       if (!this.scope)
         return Promise.reject(new Error('the data store is already reset.'));
-      return provider.getAllDataElements(this.scope, this.name).then(result => {
-        let elements = [];
-        Object.keys(result || []).forEach(key => {
-          elements.push(new ItoDataElement(this, key, result[key]));
-        });
-        return elements;
+      return provider.getAllDataElements(this.name).then(result => {
+        let r = result || [];
+        return Object.keys(r).reduce((a, b) => {
+          a.push(new ItoDataElement(this, b, r[b]));
+          return a;
+        }, []);
       });
     }
 
     remove(key) {
       if (!this.scope)
         return Promise.reject(new Error('the data store is already reset.'));
-      return provider.removeDataElement(this.scope, this.name, key);
+      return provider.removeDataElement(this.name, key);
     }
 
     removeAll(key) {
       if (!this.scope)
         return Promise.reject(new Error('the data store is already reset.'));
-      return provider.removeAllDataElements(this.scope, this.name);
+      return provider.removeAllDataElements(this.name);
     }
 
     reset() {
       if (!this.scope)
         return Promise.reject(new Error('the data store is already reset.'));
-      return provider.removeDataStore(this.scope, this.name).then(() => {
+      return provider.removeDataStore(this.name).then(() => {
         delete scopes[this.name];
       });
     }
@@ -1108,19 +1121,6 @@
       this.data = data;
     }
   }
-
-  /*
-   * Client Properties
-   */
-  Object.defineProperties(self.ito, {
-    state: { get: () => { return state; } },
-    profile: { get: () => { return profile; } },
-    passcode: { get: () => { return provider.getPasscode(); } },
-    peerConnectionOptions: {
-      get: () => { return pcOpt; },
-      set: opt => { if (opt instanceof Object) pcOpt = Object.assign(pcOpt); }
-    }
-  });
 
   if (!isBrowser) {
     self.ito.ItoProvider = self.ItoProvider;

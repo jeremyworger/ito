@@ -38,6 +38,18 @@
   const KII_BUCKET_NOTIFICATIONS = 'itonotifications';
   const KII_BUCKET_FRIENDS       = KII_GROUP_FRIENDS;
   const KII_BUCKET_PROFILE       = 'itoprofile';
+  const KII_BUCKET_DATASTORE_REF = 'itodatastore';
+  const KII_BUCKET_DATASTORE     = 'itodata_';
+  const KII_OBJ_EMAIL            = 'itoemail_';
+  const KII_OBJ_PASSCODE         = 'itopasscode_';
+  const KII_OBJ_PROFILE          = KII_BUCKET_PROFILE + '_';
+  const KII_OBJ_DATASTORE_REF    = KII_BUCKET_DATASTORE_REF + '_';
+
+  const KII_SUB = {};
+  const KII_ACTION = {
+    BUCKET: {},
+    OBJECT: {}
+  };
 
   let appId = null;
 
@@ -51,6 +63,8 @@
   let friendsBucket = null;
   /** @type {?KiiBucket} */
   let profileBucket = null;
+  /** @type {?KiiBucket} */
+  let dataStoreRefBucket = null;
   /** @type {?KiiObject} */
   let profileRef = null;
   /** @type {?KiiObject} */
@@ -59,7 +73,7 @@
   let emailRef = null;
   let friendsRef = {};
   let ping = null;
-  /** @type {Array<stirng>} */
+  /** @type {Array<string>} */
   let pendingRequests = [];
 
   let mqttClient = null;
@@ -80,6 +94,8 @@
   let currentUser = null;
 
   let passcode = null;
+
+  let dataStoreRef = {};
 
   if(!self.ito.provider)
     self.ito.provider = {};
@@ -135,6 +151,15 @@
             let s = document.createElement('script');
             s.src = url || 'KiiSDK.min.js';
             s.addEventListener('load', () => {
+              // constant values
+              KII_SUB.ANONYMOUS        = new KiiAnonymousUser();
+              KII_SUB.AUTHENTICATED    = new KiiAnyAuthenticatedUser();
+              KII_ACTION.BUCKET.CREATE = KiiACLAction.KiiACLBucketActionCreateObjects;
+              KII_ACTION.BUCKET.QUERY  = KiiACLAction.KiiACLBucketActionQueryObjects;
+              KII_ACTION.BUCKET.DROP   = KiiACLAction.KiiACLBucketActionDropBucket;
+              KII_ACTION.BUCKET.READ   = KiiACLAction.KiiACLBucketActionReadObjects;
+              KII_ACTION.OBJECT.READ   = KiiACLAction.KiiACLObjectActionRead;
+              KII_ACTION.OBJECT.WRITE  = KiiACLAction.KiiACLObjectActionWrite;
               let t = document.createElement('script');
               t.src = 'https://unpkg.com/mqtt/dist/mqtt.min.js';
               t.addEventListener('load', () => {resolve(); });
@@ -379,7 +404,7 @@
     }
 
     /*
-     * Firebase Database: WebRTC Signaling Messages
+     * Kii Cloud: WebRTC Signaling Messages
      */
     sendInvite(uid, opt) {
       let user = getUser();
@@ -457,6 +482,66 @@
         return;
       });
     }
+
+    /*
+     * Kii Cloud: Simple Data Store Sharing
+     */
+    openDataStore(scope, name) {
+      return kiiPushQueue(kiiOpenDataStore, {
+        scope: scope,
+        name: name
+      }).then(s => { return s || scope; });
+    }
+
+    removeDataStore(name) {
+      return kiiPushQueue(kiiRemoveDataStore, {
+        name: name
+      });
+    }
+
+    putDataElement(name, key, data) {
+      return kiiPushQueue(kiiPutDataElement, {
+        name: name,
+        key: key,
+        data: data
+      });
+    }
+
+    getDataElement(name, key) {
+      return kiiPushQueue(kiiGetDataElement, {
+        name: name,
+        key: key
+      });
+    }
+
+    getAllDataElements(name) {
+      return kiiPushQueue(kiiGetAllDataElements, {
+        name: name
+      });
+    }
+
+    removeDataElement(name, key) {
+      return kiiPushQueue(kiiRemoveDataElement, {
+        name: name,
+        key: key
+      });
+    }
+
+    removeAllDataElements(name) {
+      return kiiPushQueue(kiiRemoveAllDataElements, {
+        name: name
+      });
+    }
+
+    observeDataStore(uid, name) {
+      return kiiPushQueue(kiiObserveDataStore, {
+        uid: uid,
+        name: name
+      });
+    };
+
+    disconnectDataStoreObserver(uid, name) {
+    }
   }
   let provider = new KiiProvider(self.ito);
   self.ito.provider.kii = provider;
@@ -501,11 +586,6 @@
       email: email,
       status: isOnline ? 'online' : 'offline'
     };
-    /*
-    let p = firebase.database().ref('users/' + user.uid).set(prof)
-      .then(firebase.database().ref('emails/' + firebaseEscape(email)).set(user.uid))
-      .then(firebaseCheckAdministrator);
-      */
     return kiiOnOnline().then(() => {
       Object.keys(prof).forEach(i => {
         profileRef.set(i, prof[i]);
@@ -524,6 +604,7 @@
       email = user.getEmailAddress() || user.getID();
       userName = user.getDisplayName() || email;
       let prof = {
+        uid: user.getID(),
         userName: userName,
         email: email,
         status: 'online'
@@ -558,22 +639,17 @@
     })
   }
 
-  function kiiSetACLEntry(target, scope, action, grant) {
+  function kiiSetACLEntry(target, subject, action, grant) {
     let acl = (target.objectACL || target.acl)();
-    let entry = KiiACLEntry.entryWithSubject(scope, action);
+    let entry = KiiACLEntry.entryWithSubject(subject, action);
     entry.setGrant(grant);
     acl.putACLEntry(entry);
-    return acl.save();
+    return acl.save().catch(() => {});
   }
 
   function kiiLimitObjectACL(object) {
     let group = KiiGroup.groupWithID(object.objectURI().replace(/^kiicloud:\/\/groups\/(.*?)\/.*\/(.*)$/, '$1'));
-    return kiiSetACLEntry(
-      object,
-      group,
-      KiiACLAction.KiiACLObjectActionRead,
-      false
-    );
+    return kiiSetACLEntry(object, group, KII_ACTION.OBJECT.READ, false);
   }
 
   function kiiShiftQueue() {
@@ -634,20 +710,13 @@
   }
 
   function kiiInitProfileRef() {
-    profileRef = profileBucket.createObject('profile');
+    let user = getUser();
+    profileRef = profileBucket.createObjectWithID(KII_OBJ_PROFILE + user.getID());
     profileRef.set('type', 'profile');
-    return profileRef.save().then(() => {
-      return kiiSetACLEntry(
-        profileRef,
-        friendsGroup,
-        KiiACLAction.KiiACLObjectActionWrite,
-        false
-      ).then(() => {
-        return kiiSetACLEntry(
-          profileBucket,
-          friendsGroup,
-          KiiACLAction.KiiACLBucketActionReadObjects,
-          true );
+    return profileRef.saveAllFields().then(() => {
+      return   kiiSetACLEntry(profileRef,    friendsGroup, KII_ACTION.OBJECT.WRITE, false)
+      .then(() => {
+        return kiiSetACLEntry(profileBucket, friendsGroup, KII_ACTION.BUCKET.READ,  true);
       });
     });
   }
@@ -658,18 +727,14 @@
       if(g) {
         let fb = g.bucketWithName(KII_BUCKET_FRIENDS);
         let pb = g.bucketWithName(KII_BUCKET_PROFILE);
-        let q = KiiQuery.queryWithClause(KiiClause.equals('type', 'profile'));
-        return pb.executeQuery(q).then(p => {
-          if(p[1].length > 0) {
-            friendsRef[uid] = {
-              friendsBucket: fb,
-              profileBucket: pb,
-              profile: p[1][0]
-            };
-            return p[1][0];
-          }
-          else
-            return null;
+        let friend = pb.createObjectWithID(KII_OBJ_PROFILE + uid);
+        return friend.refresh().then(() => {
+          friendsRef[uid] = {
+            friendsBucket: fb,
+            profileBucket: pb,
+            profile: friend
+          };
+          return friend;
         });
       }
       else
@@ -697,21 +762,18 @@
             let uid = u.getID();
             let fb = g.bucketWithName(KII_BUCKET_FRIENDS);
             let pb = g.bucketWithName(KII_BUCKET_PROFILE);
-            let q = KiiQuery.queryWithClause(KiiClause.equals('type', 'profile'));
-            return pb.executeQuery(q).then(p => {
-              if(p[1].length > 0) {
-                let friend = p[1][0];
-                friendsRef[uid] = {
-                  friendsBucket: fb,
-                  profileBucket: pb,
-                  profile: friend
-                };
-                provider.onAddFriend(uid, {
-                  email: friend.get('email'),
-                  userName: friend.get('userName'),
-                  status: friend.get('status')
-                });
-              }
+            let friend = pb.createObjectWithID(KII_OBJ_PROFILE + uid);
+            return friend.refresh().then(() => {
+              friendsRef[uid] = {
+                friendsBucket: fb,
+                profileBucket: pb,
+                profile: friend
+              };
+              provider.onAddFriend(uid, {
+                email: friend.get('email'),
+                userName: friend.get('userName'),
+                status: friend.get('status')
+              });
             });
           }
         })
@@ -733,7 +795,7 @@
 
   function kiiRefreshAll() {
     return Promise.all(Object.keys(friendsRef).map(k => {
-      return friendsRef[k].profile.refresh().then(kiiOnMessage);
+      return friendsRef[k].profile.refresh().then(kiiOnUpdate);
     }));
   }
 
@@ -792,7 +854,7 @@
   }
 
   /** @param {KiiObject} data */
-  function kiiOnMessage(data) {
+  function kiiOnUpdate(data) {
     let user = getUser();
     let type = data.get('type');
     let uid = data.get('uid');
@@ -824,10 +886,6 @@
     }
   }
 
-  function kiiDispatchUpdatedObject(object) {
-    return kiiOnMessage(object);
-  }
-
   function kiiInitMqttClient() {
     let user = getUser();
     let response, endpoint;
@@ -856,28 +914,47 @@
       });
       mqttClient.on('message', (topic, message, packet) => {
         let body = JSON.parse(message.toString());
-        let object = KiiObject.objectWithURI(body.sourceURI);
-        let i;
         // Note: ito does not currently use Push-to-User notification,
         //       for the purpose of ensuring compatibility with Firebase
         //       and better offline support.
-        if(!body.sourceURI.match(/^kiicloud:\/.*\/topics\//)) {
-          switch(body.type) {
-          case 'DATA_OBJECT_CREATED':
-            object.refresh().then(obj => {
-              kiiDispatchNewObject(obj);
-            });
-            break;
-          case 'DATA_OBJECT_UPDATED':
-            object.refresh().then(obj => {
-              kiiDispatchUpdatedObject(obj);
-            });
-            break;
-          case 'DATA_OBJECT_DELETED':
-            i = pendingRequests.indexOf(object.objectURI());
-            if(i >= 0)
-              pendingRequests.splice(i, 1);
-            break;
+        if(body.objectID) {
+          let object = KiiObject.objectWithURI(body.sourceURI);
+          let i;
+          if(body.objectID.match(new RegExp('^' + KII_BUCKET_DATASTORE))) {
+            switch(body.type) {
+            case 'DATA_OBJECT_CREATED':
+              object.refresh().then(obj => {
+                kiiObserveDataElementAdd(obj, body.bucketID);
+              });
+              break;
+            case 'DATA_OBJECT_UPDATED':
+              object.refresh().then(obj => {
+                kiiObserveDataElementUpdate(obj, body.bucketID);
+              });
+              break;
+            case 'DATA_OBJECT_DELETED':
+              kiiObserveDataElementRemove(obj, body.bucketID);
+              break;
+            }
+          }
+          else {
+            switch(body.type) {
+            case 'DATA_OBJECT_CREATED':
+              object.refresh().then(obj => {
+                kiiDispatchNewObject(obj);
+              });
+              break;
+            case 'DATA_OBJECT_UPDATED':
+              object.refresh().then(obj => {
+                kiiOnUpdate(obj);
+              });
+              break;
+            case 'DATA_OBJECT_DELETED':
+              i = pendingRequests.indexOf(object.objectURI());
+              if(i >= 0)
+                pendingRequests.splice(i, 1);
+              break;
+            }
           }
         }
       });
@@ -885,25 +962,11 @@
   }
 
   function kiiSetAppScopeObjectACL(object) {
-    return kiiSetACLEntry(
-      object,
-      new KiiAnyAuthenticatedUser(),
-      KiiACLAction.KiiACLObjectActionRead,
-      false
-    ).then(() => {
-      return kiiSetACLEntry(
-        object,
-        new KiiAnonymousUser(),
-        KiiACLAction.KiiACLObjectActionRead,
-        false
-      );
+    return kiiSetACLEntry(  object, KII_SUB.AUTHENTICATED, KII_ACTION.OBJECT.READ,  false)
+    .then(() => {
+      return kiiSetACLEntry(object, KII_SUB.ANONYMOUS,     KII_ACTION.OBJECT.READ,  false);
     }).then(() => {
-      return kiiSetACLEntry(
-        object,
-        new KiiAnyAuthenticatedUser(),
-        KiiACLAction.KiiACLObjectActionWrite,
-        false
-      );
+      return kiiSetACLEntry(object, KII_SUB.AUTHENTICATED, KII_ACTION.OBJECT.WRITE, false);
     });
   }
 
@@ -944,14 +1007,16 @@
   }
 
   function kiiSetEmailRef() {
+    let user = getUser();
     let created = !!emailRef;
     if(!created)
-      emailRef = itoBucket.createObject();
+      emailRef = itoBucket.createObjectWithID(KII_OBJ_EMAIL + user.getID());
     emailRef.set('type', 'email');
     emailRef.set('email', email);
     emailRef.set('group', friendsGroup.getID());
     emailRef.set('status', 'online');
-    return emailRef.save().then(() => {
+    emailRef.set('dataobserver', []);
+    return emailRef.saveAllFields().then(() => {
       return !created ? kiiSetAppScopeObjectACL(emailRef, true) : Promise.resolve();
     });
   }
@@ -1039,6 +1104,7 @@
   }
 
   function kiiUnsubscribePush(target) {
+    console.log('unsubscribe');
     let user = getUser();
     return user.pushSubscription().isSubscribed(target).then(params => {
       if(params[2])
@@ -1059,24 +1125,16 @@
 
   function kiiOnOnline() {
     let user = getUser();
-    let query = KiiQuery.queryWithClause(KiiClause.equals('_owner', user.getID()));
     return kiiInitMqttClient().then(kiiInitGroup).then(() => {
       itoBucket = Kii.bucketWithName(KII_BUCKET);
       notificationBucket = Kii.bucketWithName(KII_BUCKET_NOTIFICATIONS);
+      dataStoreRefBucket = Kii.bucketWithName(KII_BUCKET_DATASTORE_REF);
       friendsBucket = friendsGroup.bucketWithName(KII_BUCKET_FRIENDS);
       profileBucket = friendsGroup.bucketWithName(KII_BUCKET_PROFILE);
-      return profileBucket.executeQuery(query);
-    }).then(params => {
-      params[1].forEach(object => {
-        switch(object.get('type')) {
-        case 'profile':
-          profileRef = object;
-          break;
-        }
-      });
-    }).then(() => {
-      if(!profileRef)
+      profileRef = profileBucket.createObjectWithID(KII_OBJ_PROFILE + user.getID());
+      return profileRef.refresh().catch(() => {
         return kiiInitProfileRef();
+      });
     }).then(() => {
       return kiiSubscribePush(friendsBucket);
     }).then(() => {
@@ -1084,23 +1142,18 @@
     }).then(() => {
       return kiiCheckAdministrator();
     }).then(() => {
-      return itoBucket.executeQuery(query);
-    }).then(params => {
-      params[1].forEach(object => {
-        switch(object.get('type')) {
-        case 'passcode':
-          passcodeRef = object;
-          passcode = object.get('passcode');
-          break;
-        case 'email':
-          emailRef = object;
-          break;
-        }
-      });
+      return Kii.serverCodeEntry('unsubscribeDataStore').execute({ a: 0 });
+    }).then(() => {
+      emailRef = itoBucket.createObjectWithID(KII_OBJ_EMAIL + user.getID());
+      return emailRef.refresh().catch(() => {}).then(kiiSetEmailRef);
+    }).then(() => {
+      passcodeRef = itoBucket.createObjectWithID(KII_OBJ_PASSCODE + user.getID());
+      return passcodeRef.refresh().then(obj => {
+        passcode = obj.get('passcode');
+      }, () => { passcodeRef = null; });
     }).then(() => {
       return kiiPushQueue( passcode ? kiiSetPasscodeRef : kiiResetPasscodeRef );
-    }).then(kiiSetEmailRef)
-    .then(kiiCheckAll)
+    }).then(kiiCheckAll)
     .then(() => {
       if(!ping)
         ping = setInterval(kiiPing, 5000);
@@ -1125,6 +1178,7 @@
         itoBucket = null;
         friendsBucket = null;
         profileRef = null;
+        dataStoreRefBucket = null;
         return Kii.serverCodeEntry('removePendingRequests').execute({
           pendingRequests: pendingRequests
         });
@@ -1215,6 +1269,195 @@
     });
   }
 
+  /*
+   * Kii Cloud: Simple Data Store Sharing
+   */
+  function kiiEncodeUserID(uid) {
+    return btoa(uid.replace(/-/g, '').match(/([0-9a-f]{1,2})/g).reduce((a, b) => {
+      return a + String.fromCharCode(parseInt(b, 16));
+    }, '')).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function kiiOpenDataStore(arg) {
+    const uid = getUser().getID();
+    const name = arg.name;
+    let dataStore = KII_BUCKET_DATASTORE + kiiEncodeUserID(uid) + '_' + name;
+    return dataStoreRef[name] ?
+      Promise.resolve(dataStoreRef[name].scope) :
+      Kii.serverCodeEntry('openDataStore').execute({
+        scope: arg.scope,
+        name: name,
+        group: friendsGroup.getID(),
+        dataStore: dataStore,
+        dataStoreRef: KII_OBJ_DATASTORE_REF + uid + '_' + name
+      }).then(result => {
+        let r = result[2].getReturnedValue().returnedValue;
+        if(r.result === 'ok') {
+          dataStoreRef[name] = {
+            scope: r.scope,
+            bucket: Kii.bucketWithName(dataStore),
+            elements: {}
+          };
+          return r.scope;
+        }
+        else
+          throw new Error('could not open the data store: ' + name);
+      });
+  }
+
+  function kiiRemoveDataStore(arg) {
+    const uid = getUser().getID();
+    const name = arg.name;
+    const refid = KII_OBJ_DATASTORE_REF + uid + '_' + name;
+    let ref = dataStoreRefBucket.createObjectWithID(refid);
+    delete dataStoreRef[name];
+    return ref.delete().then(() => {
+      let store = Kii.bucketWithName(KII_BUCKET_DATASTORE + kiiEncodeUserID(uid) + '_' + name);
+      return store.delete();
+    });
+  }
+
+  function kiiPutDataElement(arg) {
+    const key = arg.key;
+    const data = arg.data;
+    let ref = dataStoreRef[arg.name];
+    if(!ref)
+      return Promise.reject(new Error('no such data store'));
+    let element;
+    if(ref.elements[key]) {
+      element = ref.elements[key];
+      element.set('data', data);
+      return element.save();
+    }
+    else {
+      element = ref.bucket.createObjectWithID(ref.bucket.getBucketName() + '_' + key);
+      element.set('data', data);
+      return element.saveAllFields();
+    }
+  }
+
+  function kiiGetDataElement(arg) {
+    const key = arg.key;
+    let ref = dataStoreRef[arg.name];
+    if(!ref)
+      return Promise.reject(new Error('no such data store'));
+    let element = ref.elements[key];
+    if(element) {
+      return element.refresh().then(obj => {
+        return { key: key, data: obj.get('data') };
+      });
+    }
+    else {
+      element = ref.bucket.createObjectWithID(ref.bucket.getBucketName() + '_' + key);
+      return element.refresh().then(obj => {
+        ref.elements[key] = obj;
+        return { key: key, data: obj.get('data') };
+      }, () => {
+        throw new Error('no such key in the data store');
+      });
+    }
+  }
+
+  function kiiGetAllDataElements(arg) {
+    let ref = dataStoreRef[arg.name];
+    if(!ref)
+      return Promise.reject(new Error('no such data store'));
+    return ref.bucket.executeQuery(KiiQuery.queryWithClause()).then(params => {
+      return params[1].reduce((result, obj) => {
+        const key = obj.getID().substr(ref.bucket.getBucketName().length + 1);
+        const data = obj.get('data');
+        ref.elements[key] = obj;
+        result[key] = data;
+        return result;
+      }, {});
+    });
+  }
+
+  function kiiRemoveDataElement(arg) {
+    const key = arg.key;
+    let ref = dataStoreRef[arg.name];
+    if(!ref)
+      return Promise.reject(new Error('no such data store'));
+    let element = ref.elements[key] || ref.bucket.createObjectWithID(ref.bucket.getBucketName() + '_' + key);
+    delete ref.elements[key];
+    return element.delete().catch(() => {});
+  }
+
+  function kiiRemoveAllDataElements(arg) {
+    let ref = dataStoreRef[arg.name];
+    if(!ref)
+      return Promise.reject(new Error('no such data store'));
+    ref.elements = [];
+    return ref.bucket.executeQuery(KiiQuery.queryWithClause()).then(params => {
+      return params[1].reduce((p, obj) => {
+        return p.then(() => { return obj.delete().catch(() => {}); });
+      }, Promise.resolve());
+    });
+  }
+
+  function kiiObserveDataStore(arg) {
+    const uid = arg.uid;
+    const name = arg.name;
+    let storeRef = Kii.bucketWithName(KII_BUCKET_DATASTORE_REF).createObjectWithID(KII_OBJ_DATASTORE_REF + uid + '_' + name);
+    let store;
+    return storeRef.refresh().then(obj => {
+      store = Kii.bucketWithName(obj.get('datastore')); 
+      let observers = emailRef.get('dataobserver');
+      observers.push(store.getBucketName());
+      emailRef.set('dataobserver', observers);
+      return emailRef.save();
+    }).then(() => {
+      return kiiSubscribePush(store);
+    }).then(() => {
+      return arg;
+    }).catch(e => {
+      throw new Error('no such data store or permission denied');
+    });
+  }
+
+  function kiiDisconnectDataStoreObserver(arg) {
+  }
+
+  function kiiBase64ToUUID(ref) {
+    let d = atob(ref.replace(/-/g, '+').replace(/_/g, '/'));
+    let r = '';
+    for(let i = 0 ; i < d.length ; i++) {
+      let c = d.charCodeAt(i).toString(16);
+      r += ('0' + c).substr(c.length - 1, 2);
+      switch(i) {
+      case 5:
+      case 7:
+      case 9:
+      case 11:
+        r += '-';
+      }
+    }
+    return r;
+  }
+
+  function kiiDecodeDataStoreRef(ref, bucket) {
+    console.log(ref);
+    const r = bucket.replace(new RegExp('^' + KII_BUCKET_DATASTORE), '');
+    const uid = kiiBase64ToUUID(r.substr(0, 22));
+    const name = r.substr(23);
+    const key = ref.replace(new RegExp('^' + bucket), '');    
+    console.log(uid, name, key);
+  }
+
+  function kiiObserveDataElementAdd(object, bucket) {
+    let arg = kiiDecodeDataStoreRef(object.getID(), bucket);
+    console.log('add', object);
+  }
+
+  function kiiObserveDataElementUpdate(object, bucket) {
+    let arg = kiiDecodeDataStoreRef(object.getID(), bucket);
+    console.log('update', object);
+  }
+
+  function kiiObserveDataElementRemove(object, bucket) {
+    let arg = kiiDecodeDataStoreRef(object.getID(), bucket);
+    console.log('remove', object);
+  }
 
   if(isBrowser) {
     window.addEventListener('unload', () => {

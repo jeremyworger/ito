@@ -82,16 +82,48 @@ if(!clientSecret) {
   process.exit();
 }
 
+const subject = {
+  anonymous: new KiiAnonymousUser(),
+  authenticated: new KiiAnyAuthenticatedUser()
+};
+
+const KII_GROUP_FRIENDS        = 'itofriends';
+const KII_BUCKET               = 'ito';
+const KII_BUCKET_NOTIFICATIONS = 'itonotifications';
+const KII_BUCKET_FRIENDS       = KII_GROUP_FRIENDS;
+const KII_BUCKET_PROFILE       = 'itoprofile';
+const KII_BUCKET_DATASTORE_REF = 'itodatastore';
+const KII_BUCKET_DATASTORE     = 'itodata_';
+const KII_OBJ_EMAIL            = 'itoemail_';
+const KII_OBJ_PASSCODE         = 'itopasscode_';
+const KII_OBJ_PROFILE          = KII_BUCKET_PROFILE + '_';
+const KII_OBJ_DATASTORE_REF    = KII_BUCKET_DATASTORE_REF + '_';
+
+const action = {
+  bucket: {
+    create: KiiACLAction.KiiACLBucketActionCreateObjects,
+    query:  KiiACLAction.KiiACLBucketActionQueryObjects,
+    drop:   KiiACLAction.KiiACLBucketActionDropBucket,
+    read:   KiiACLAction.KiiACLBucketActionReadObjects
+  },
+  object: {
+    read:   KiiACLAction.KiiACLObjectActionRead,
+    write:  KiiACLAction.KiiACLObjectActionWrite
+  }
+};
+
 /** @type {KiiAppAdminContext} */
 let admin;
 /** @type {KiiBucket} */
 let ito;
 /** @type {KiiBucket} */
 let itoNotification;
+/** @type {KiiBucket} */
+let itoDataStoreRef;
 Kii.initializeWithSite(appId, appKey, KiiSite[site]);
 return Kii.authenticateAsAppAdmin(clientId, clientSecret).then(a => {
   admin = a;
-  ito = admin.bucketWithName('ito');
+  ito = admin.bucketWithName(KII_BUCKET);
   const query = KiiQuery.queryWithClause(KiiClause.equals('type', 'administrators'));
   return ito.executeQuery(query);
 }).then(params => {
@@ -105,109 +137,55 @@ return Kii.authenticateAsAppAdmin(clientId, clientSecret).then(a => {
     return params[1][0];
 }).then(object => {
   return kiiSetACLEntries(object, [
-    {
-      subject: new KiiAnyAuthenticatedUser(),
-      action: KiiACLAction.KiiACLObjectActionRead,
-      granted: false
-    }, {
-      subject: new KiiAnonymousUser(),
-      action: KiiACLAction.KiiACLObjectActionRead,
-      granted: false
-    }, {
-      subject: new KiiAnyAuthenticatedUser(),
-      action: KiiACLAction.KiiACLObjectActionWrite,
-      granted: true
-    }, {
-      subject: new KiiAnonymousUser(),
-      action: KiiACLAction.KiiACLObjectActionWrite,
-      granted: false
-    }
+    { subject: subject.authenticated, action: action.object.read,  granted: false },
+    { subject: subject.authenticated, action: action.object.write, granted: true  },
+    { subject: subject.anonymous,     action: action.object.read,  granted: false },
+    { subject: subject.anonymous,     action: action.object.write, granted: false }
   ]);
 }).then(() => {
   return kiiSetACLEntries(ito, [
-    {
-      subject: new KiiAnyAuthenticatedUser(),
-      action: KiiACLAction.KiiACLBucketActionCreateObjects,
-      granted: true
-    }, {
-      subject: new KiiAnonymousUser(),
-      action: KiiACLAction.KiiACLBucketActionCreateObjects,
-      granted: false
-    }, {
-      subject: new KiiAnyAuthenticatedUser(),
-      action: KiiACLAction.KiiACLBucketActionQueryObjects,
-      granted: true
-    }, {
-      subject: new KiiAnonymousUser(),
-      action: KiiACLAction.KiiACLBucketActionQueryObjects,
-      granted: false
-    }, {
-      subject: new KiiAnyAuthenticatedUser(),
-      action: KiiACLAction.KiiACLBucketActionDropBucket,
-      granted: false
-    }, {
-      subject: new KiiAnonymousUser(),
-      action: KiiACLAction.KiiACLBucketActionDropBucket,
-      granted: false
-    }, {
-      subject: new KiiAnyAuthenticatedUser(),
-      action: KiiACLAction.KiiACLBucketActionReadObjects,
-      granted: false
-    }, {
-      subject: new KiiAnonymousUser(),
-      action: KiiACLAction.KiiACLBucketActionReadObjects,
-      granted: false
-    }
+    { subject: subject.authenticated, action: action.bucket.create, granted: true  },
+    { subject: subject.authenticated, action: action.bucket.query , granted: true  },
+    { subject: subject.authenticated, action: action.bucket.drop  , granted: false },
+    { subject: subject.authenticated, action: action.bucket.read  , granted: false },
+    { subject: subject.anonymous    , action: action.bucket.create, granted: false },
+    { subject: subject.anonymous    , action: action.bucket.query , granted: false },
+    { subject: subject.anonymous    , action: action.bucket.drop  , granted: false },
+    { subject: subject.anonymous    , action: action.bucket.read  , granted: false }
   ]);
 }).then(() => {
-  itoNotification = admin.bucketWithName('itonotifications');
-  const query = KiiQuery.queryWithClause(KiiClause.equals('type', 'lastupdated'));
-  return ito.executeQuery(query);
-}).then(params => {
-  if(params[1].length === 0) {
-    let object = itoNotification.createObject();
-    object.set('type', 'lastupdated');
-    return object.save();
-  }
-  else
-    return params[1][0];
+  itoNotification = admin.bucketWithName(KII_BUCKET_NOTIFICATIONS);
+  let object = itoNotification.createObject();
+  return object.save();
 }).then(object => {
   return object.delete();
 }).then(() => {
   return kiiSetACLEntries(itoNotification, [
-    {
-      subject: new KiiAnyAuthenticatedUser(),
-      action: KiiACLAction.KiiACLBucketActionCreateObjects,
-      granted: false
-    }, {
-      subject: new KiiAnonymousUser(),
-      action: KiiACLAction.KiiACLBucketActionCreateObjects,
-      granted: false
-    }, {
-      subject: new KiiAnyAuthenticatedUser(),
-      action: KiiACLAction.KiiACLBucketActionQueryObjects,
-      granted: true
-    }, {
-      subject: new KiiAnonymousUser(),
-      action: KiiACLAction.KiiACLBucketActionQueryObjects,
-      granted: false
-    }, {
-      subject: new KiiAnyAuthenticatedUser(),
-      action: KiiACLAction.KiiACLBucketActionDropBucket,
-      granted: false
-    }, {
-      subject: new KiiAnonymousUser(),
-      action: KiiACLAction.KiiACLBucketActionDropBucket,
-      granted: false
-    }, {
-      subject: new KiiAnyAuthenticatedUser(),
-      action: KiiACLAction.KiiACLBucketActionReadObjects,
-      granted: true
-    }, {
-      subject: new KiiAnonymousUser(),
-      action: KiiACLAction.KiiACLBucketActionReadObjects,
-      granted: false
-    }
+    { subject: subject.authenticated, action: action.bucket.create, granted: false },
+    { subject: subject.authenticated, action: action.bucket.query , granted: true  },
+    { subject: subject.authenticated, action: action.bucket.drop  , granted: false },
+    { subject: subject.authenticated, action: action.bucket.read  , granted: true  },
+    { subject: subject.anonymous    , action: action.bucket.create, granted: false },
+    { subject: subject.anonymous    , action: action.bucket.query , granted: false },
+    { subject: subject.anonymous    , action: action.bucket.drop  , granted: false },
+    { subject: subject.anonymous    , action: action.bucket.read  , granted: false }
+  ]);
+}).then(() => {
+  itoDataStoreRef = admin.bucketWithName(KII_BUCKET_DATASTORE_REF);
+  let object = itoDataStoreRef.createObject();
+  return object.save();
+}).then(object => {
+  return object.delete();
+}).then(() => {
+  return kiiSetACLEntries(itoDataStoreRef, [
+    { subject: subject.authenticated, action: action.bucket.create, granted: true  },
+    { subject: subject.authenticated, action: action.bucket.query , granted: false },
+    { subject: subject.authenticated, action: action.bucket.drop  , granted: false },
+    { subject: subject.authenticated, action: action.bucket.read  , granted: false },
+    { subject: subject.anonymous    , action: action.bucket.create, granted: false },
+    { subject: subject.anonymous    , action: action.bucket.query , granted: false },
+    { subject: subject.anonymous    , action: action.bucket.drop  , granted: false },
+    { subject: subject.anonymous    , action: action.bucket.read  , granted: false }
   ]);
 }).catch(err => {
   console.error(err);

@@ -1,71 +1,69 @@
-function kiiAddACLEntry(object, scope, action, grant) {
-  if(!(object instanceof KiiObject))
+var KII_GROUP_FRIENDS        = 'itofriends';
+var KII_BUCKET               = 'ito';
+var KII_BUCKET_NOTIFICATIONS = 'itonotifications';
+var KII_BUCKET_FRIENDS       = KII_GROUP_FRIENDS;
+var KII_BUCKET_PROFILE       = 'itoprofile';
+var KII_BUCKET_DATASTORE_REF = 'itodatastore';
+var KII_BUCKET_DATASTORE     = 'itodata_';
+var KII_OBJ_EMAIL            = 'itoemail_';
+var KII_OBJ_PASSCODE         = 'itopasscode_';
+var KII_OBJ_PROFILE          = KII_BUCKET_PROFILE + '_';
+var KII_OBJ_DATASTORE_REF    = KII_BUCKET_DATASTORE_REF + '_';
+
+var subject = {
+  anonymous: new KiiAnonymousUser(),
+  authenticated: new KiiAnyAuthenticatedUser()
+};
+
+var action = {
+  bucket: {
+    create: KiiACLAction.KiiACLBucketActionCreateObjects,
+    query:  KiiACLAction.KiiACLBucketActionQueryObjects,
+    drop:   KiiACLAction.KiiACLBucketActionDropBucket,
+    read:   KiiACLAction.KiiACLBucketActionReadObjects
+  },
+  object: {
+    read:   KiiACLAction.KiiACLObjectActionRead,
+    write:  KiiACLAction.KiiACLObjectActionWrite
+  }
+};
+
+function kiiSetACLEntry(target, scope, action, grant) {
+  if(!(target instanceof KiiObject) && !(target instanceof KiiBucket))
     return;
-  var acl = (object.objectACL || object.acl)();
+  var acl = (target.objectACL || target.acl)();
   var entry = KiiACLEntry.entryWithSubject(scope, action);
   entry.setGrant(grant);
   acl.putACLEntry(entry);
-  return acl.save();
+  return acl.save().catch(function() {});
 }
 
 function kiiSetAppScopeObjectACL(object) {
   if(!(object instanceof KiiObject))
     return;
-  return kiiAddACLEntry(
-    object,
-    new KiiAnyAuthenticatedUser(),
-    KiiACLAction.KiiACLObjectActionRead,
-    false
-  ).then(function() {
-    return kiiAddACLEntry(
-      object,
-      new KiiAnonymousUser(),
-      KiiACLAction.KiiACLObjectActionRead,
-      false
-    );
+  return   kiiSetACLEntry(object, subject.authenticated, action.object.read,  false)
+  .then(function() {
+    return kiiSetACLEntry(object, subject.anonymous,     action.object.read,  false);
   }).then(function() {
-    return kiiAddACLEntry(
-      object,
-      new KiiAnyAuthenticatedUser(),
-      KiiACLAction.KiiACLObjectActionWrite,
-      false
-    );
+    return kiiSetACLEntry(object, subject.authenticated, action.object.write, false);
   });
 }
 
 function kiiSetNotificationACL(object) {
   if(!(object instanceof KiiObject))
     return;
-  return kiiAddACLEntry(
-    object,
-    new KiiAnonymousUser(),
-    KiiACLAction.KiiACLObjectActionRead,
-    false
-  ).then(function() {
-    return kiiAddACLEntry(
-      object,
-      new KiiAnyAuthenticatedUser(),
-      KiiACLAction.KiiACLObjectActionWrite,
-      false
-    );
+  return   kiiSetACLEntry(object, subject.anonymous,     action.object.read,  false)
+  .then(function() {
+    return kiiSetACLEntry(object, subject.authenticated, action.object.write, false);
   });
 }
 
 function kiiSetGroupScopeObjectACL(object, group) {
   if(!(object instanceof KiiObject))
     return;
-  return kiiAddACLEntry(
-    object,
-    group,
-    KiiACLAction.KiiACLObjectActionRead,
-    false
-  ).then(function() {
-    return kiiAddACLEntry(
-      object,
-      group,
-      KiiACLAction.KiiACLObjectActionWrite,
-      false
-    );
+  return   kiiSetACLEntry(object, group, action.object.read,  false)
+  .then(function() {
+    return kiiSetACLEntry(object, group, action.object.write, false);
   });
 }
 
@@ -76,7 +74,7 @@ function kiiSearchFriendsGroup(admin, uid, type) {
     KiiClause.equals('_owner', uid),
     KiiClause.equals('type', type)
   ));
-  var b = admin.bucketWithName('ito');
+  var b = admin.bucketWithName(KII_BUCKET);
   return b.executeQuery(q).then(function(params) {
     return (params[1].length > 0) ? params[1][0].get("group") : null;
   });
@@ -85,7 +83,7 @@ function kiiSearchFriendsGroup(admin, uid, type) {
 function kiiSearchObjectsInBucket(admin, type, value) {
   if(!(admin instanceof KiiAppAdminContext))
     return;
-  var b = admin.bucketWithName('ito');
+  var b = admin.bucketWithName(KII_BUCKET);
   var q = KiiQuery.queryWithClause(KiiClause.and(
     KiiClause.equals('type', type),
     KiiClause.equals(type, value)
@@ -122,56 +120,55 @@ function kiiRemovePendingRequests(admin, uris) {
     }));
 }
 
+function kiiUnsubscribeDataStore(ref, user) {
+  if(!(ref instanceof KiiObject))
+    return;
+  return ref.refresh().then(function(obj) {
+    var l = obj.get('dataobserver');
+    return l.reduce(function(p, d) {
+      return p.then(function() {
+        var b = Kii.bucketWithName(d);
+        return user.pushSubscription().unsubscribe(b).catch(function() {});
+      });
+    }, Promise.resolve()).then(function() {
+      ref.set('dataobserver', []);
+      return ref.save();
+    });
+  });
+}
+
 function restrictItoMessage(params, context, done) {
   /** @type {KiiAppAdminContext} */
   var admin = context.getAppAdminContext();
   var object = admin.objectWithURI(params.uri);
-  var b = admin.bucketWithName('ito');
-  var q, p, m;
+  var b = admin.bucketWithName(KII_BUCKET);
+  var p, m;
   object.refresh().then(function() {
-    switch(object.get('type')) {
-    case 'passcode':
-      p = object.get('passcode');
-      if(p) {
-        q = KiiQuery.queryWithClause(KiiClause.equals('passcode', p));
-        return b.executeQuery(q).then(function(params) {
-          if(params[1].length > 1)
-            return object.delete().then(function() { return true; });
-          else
-            return false;
-        }).then(function(result) {
-          if(!result) {
-            KiiUser.authenticateWithToken(context.getAccessToken()).then(function() {
-              var u = Kii.bucketWithName('ito');
-              q = KiiQuery.queryWithClause(KiiClause.and(
-                KiiClause.equals('type', 'passcode'),
-                KiiClause.notEquals('_id', object.getID())
-              ));
-              u.executeQuery(q).then(function(params) {
-                if(params[1].length > 0)
-                  return object.delete();
-              });
-            });
-          }
-        });
+    return KiiUser.authenticateWithToken(context.getAccessToken()).then(function(user) {
+      switch(object.get('type')) {
+      case 'passcode':
+        if(object.getID() !== KII_OBJ_PASSCODE + user.getID())
+          return object.delete();
+        else {
+          q = KiiQuery.queryWithClause(KiiClause.equals('passcode', object.get('passcode')));
+          return b.executeQuery(q).then(function(params) {
+            if(params[1].length > 1)
+              return object.delete().then(function() { return true; });
+          });
+        }
+        break;
+      case 'email':
+        if(object.getID() !== KII_OBJ_EMAIL + user.getID())
+          return object.delete();
+        m = object.get('email');
+        if(m && m !== user.getEmailAddress() && m !== user.getID())
+          return object.delete();
+        break;
+      case 'administrators':
+        return object.delete();
+        break;
       }
-      else
-        return object.delete();
-      break;
-    case 'email':
-      m = object.get('email');
-      if(m)
-        return KiiUser.authenticateWithToken(context.getAccessToken()).then(function(user) {
-          if(m !== user.getEmailAddress() && m !== user.getID())
-            return object.delete();
-        });
-      else
-        return object.delete();
-      break;
-    case 'administrators':
-      return object.delete();
-      break;
-    }
+    });
   }).then(function() {
     done();
   }, function() {
@@ -193,20 +190,17 @@ function setPasscode(params, context, done) {
   }
   else {
     KiiUser.authenticateWithToken(context.getAccessToken()).then(function(user) {
+      b = Kii.bucketWithName(KII_BUCKET);
+      var o = b.createObjectWithID(KII_OBJ_PASSCODE + user.getID());
       if(!p || p === '') {
-        q = KiiQuery.queryWithClause(KiiClause.equals('type', 'passcode'));
-        b = Kii.bucketWithName('ito');
-        return b.executeQuery(q).then(function(params) {
-          (params[1].length !== 0 ? params[1][0].delete() : Promise.resolve()).then(function() {
-            done({
-              result: 'ok',
-              uri: null
-            });
+        o.delete().catch(function() {}).then(function() {
+          done({
+            result: 'ok',
+            uri: null
           });
         });
       }
       else {
-        b = admin.bucketWithName('ito');
         q = KiiQuery.queryWithClause(KiiClause.and(
           KiiClause.equals('passcode', p),
           KiiClause.notEquals('_owner', user.getID())
@@ -218,27 +212,25 @@ function setPasscode(params, context, done) {
               reason: 'the specified passcode already exists'
             });
           else {
-            b = Kii.bucketWithName('ito');
-            q = KiiQuery.queryWithClause(KiiClause.equals('type', 'passcode'));
-            return b.executeQuery(q).then(function(params) {
-              var f = (params[1].length === 0);
-              var o = f ? b.createObject() : params[1][0];
-              o.set('type', 'passcode');
-              o.set('passcode', p);
-              o.set('group', g);
-              o.save().then(function() {
-                if(f)
-                  return kiiSetAppScopeObjectACL(o);
-              }).then(function() {
-                done({
-                  result: 'ok',
-                  uri: o.objectURI()
-                });
+            o.set('type', 'passcode');
+            o.set('passcode', p);
+            o.set('group', g);
+            o.saveAllFields().then(function() {
+              return kiiSetAppScopeObjectACL(o);
+            }).then(function() {
+              done({
+                result: 'ok',
+                uri: o.objectURI()
               });
             });
           }
         });
       }
+    }).catch(function() {
+      done({
+        result: 'error',
+        reason: 'failed to invoke Server Code'
+      });
     });
   }
 }
@@ -277,7 +269,7 @@ function sendRequest(params, context, done) {
       }).then(function(groupId) {
         if(groupId) {
           var g = admin.groupWithID(groupId);
-          var b = g.bucketWithName('itofriends');
+          var b = g.bucketWithName(KII_BUCKET_FRIENDS);
           var msg = b.createObject();
           msg.set('type', 'request');
           msg.set('query', q);
@@ -325,7 +317,7 @@ function acceptRequest(params, context, done) {
     kiiSearchFriendsGroup(admin, u, 'email').then(function(group) {
       if(group) {
         var g = admin.groupWithID(group);
-        var b = g.bucketWithName('itofriends');
+        var b = g.bucketWithName(KII_BUCKET_FRIENDS);
         var msg = b.createObject();
         msg.set('type', 'accept');
         msg.set('uid', user.getID());
@@ -363,7 +355,7 @@ function rejectRequest(params, context, done) {
     return kiiSearchFriendsGroup(admin, u, 'email').then(function(group) {
       if(group) {
         var g = admin.groupWithID(group);
-        var b = g.bucketWithName('itofriends');
+        var b = g.bucketWithName(KII_BUCKET_FRIENDS);
         var msg = b.createObject();
         msg.set('type', 'reject');
         msg.set('uid', user.getID());
@@ -401,35 +393,24 @@ function removePendingRequests(params, context, done) {
 
 function onOffline(params, context, done) {
   return KiiUser.authenticateWithToken(context.getAccessToken()).then(function(user) {
-    var b = Kii.bucketWithName('ito');
-    var q = KiiQuery.queryWithClause(KiiClause.and(
-      KiiClause.equals('_owner', user.getID()),
-      KiiClause.equals('type', 'email')
-    ));
+    var b = Kii.bucketWithName(KII_BUCKET);
+    var o = b.createObjectWithID(KII_OBJ_EMAIL + user.getID());
     var u = params.pendingRequests;
-    return b.executeQuery(q).then(function(params) {
-      if(params[1].length > 0) {
-        kiiSetOffline(params[1][0]).then(function(obj) {
-          var g = KiiGroup.groupWithID(obj.get('group'));
-          return g.bucketWithName('itoprofile').executeQuery(
-            KiiQuery.queryWithClause(KiiClause.equals('type', 'profile'))
-          );
-        }).then(function(params) {
-          if(params[1].length > 0) {
-            kiiSetOffline(params[1][0]).then(function() {
-              return kiiRemovePendingRequests(context.getAppAdminContext(), u);
-            }).then(function() {
-              done({
-                result: 'ok'
-              });
-            });
-          }
-          else
-            throw null;
-        });
-      }
-      else
-        throw null;
+    return kiiUnsubscribeDataStore(o, user).then(function(obj) {
+      return kiiSetOffline(obj);
+    }).then(function(obj) {
+      var g = KiiGroup.groupWithID(obj.get('group'));
+      b = g.bucketWithName(KII_BUCKET_PROFILE);
+      o = b.createObjectWithID(KII_OBJ_PROFILE + user.getID());
+      return o.refresh();
+    }).then(function(obj) {
+      return kiiSetOffline(obj);
+    }).then(function() {
+      return kiiRemovePendingRequests(context.getAppAdminContext(), u);
+    }).then(function() {
+      done({
+        result: 'ok'
+      });
     });    
   }).catch(function() {
     done({
@@ -442,7 +423,7 @@ function onOffline(params, context, done) {
 function checkPing(params, context, done) {
   /** @type {KiiAppAdminContext} */
   var admin = context.getAppAdminContext();
-  var b = admin.bucketWithName('ito');
+  var b = admin.bucketWithName(KII_BUCKET);
   var q = KiiQuery.queryWithClause(KiiClause.and(
     KiiClause.equals('type', 'email'),
     KiiClause.equals('status', 'online'),
@@ -453,7 +434,7 @@ function checkPing(params, context, done) {
       var g = obj.get('group');
       console.log('   ' + g + ': ' + obj.getModified() + ' / ' + Date.now() + ' / ' + (Date.now() - parseInt(obj.getModified())));
       return kiiSetOffline(obj).then(function() {
-        return admin.groupWithID(g).bucketWithName('itoprofile').executeQuery(
+        return admin.groupWithID(g).bucketWithName(KII_BUCKET_PROFILE).executeQuery(
           KiiQuery.queryWithClause(KiiClause.equals('type', 'profile'))
         )
       }).then(function(params) {
@@ -465,7 +446,7 @@ function checkPing(params, context, done) {
 
 function clearOldNotifications(params, context, done) {
   var admin = context.getAppAdminContext();
-  var b = admin.bucketWithName('itonotifications');
+  var b = admin.bucketWithName(KII_BUCKET_NOTIFICATIONS);
   var q = KiiQuery.queryWithClause(KiiClause.and(
     KiiClause.equals('rel', 'notification'),
     KiiClause.equals('type', 'notification'),
@@ -482,12 +463,12 @@ function sendNotification(params, context, done) {
   return KiiUser.authenticateWithToken(context.getAccessToken()).then(function(user) {
     /** @type {KiiAppAdminContext} */
     var admin = context.getAppAdminContext();
-    var b = admin.bucketWithName('ito');
+    var b = admin.bucketWithName(KII_BUCKET);
     var q = KiiQuery.queryWithClause(KiiClause.equals('type', 'administrators'));
     var d = params.data;
     return b.executeQuery(q).then(function(params) {
       if(params[1].length > 0 && params[1][0].get('administrators').indexOf(user.getID()) >= 0) {
-        b = admin.bucketWithName('itonotifications');
+        b = admin.bucketWithName(KII_BUCKET_NOTIFICATIONS);
         var obj = b.createObject();
         obj.set('rel', 'notification');
         obj.set('type', 'notification');
@@ -511,7 +492,7 @@ function checkAdministrator(params, context, done) {
   return KiiUser.authenticateWithToken(context.getAccessToken()).then(function(user) {
     /** @type {KiiAppAdminContext} */
     var admin = context.getAppAdminContext();
-    var b = admin.bucketWithName('ito');
+    var b = admin.bucketWithName(KII_BUCKET);
     var q = KiiQuery.queryWithClause(KiiClause.equals('type', 'administrators'));
     return b.executeQuery(q).then(function(params) {
       done({
@@ -524,5 +505,95 @@ function checkAdministrator(params, context, done) {
       result: 'error',
       reason: 'failed to invoke Server Code'
     });
+  });
+}
+
+function openDataStore(params, context, done) {
+  var s = params.scope;
+  var d = params.dataStore;
+  var r = params.dataStoreRef;
+  var n = params.name;
+  var g = KiiGroup.groupWithID(params.group);
+  var store, dummy;
+  return KiiUser.authenticateWithToken(context.getAccessToken()).then(function(user) {
+    /** @type {KiiAppAdminContext} */
+    var admin = context.getAppAdminContext();
+    var b = Kii.bucketWithName(KII_BUCKET_DATASTORE_REF);
+    var o = b.createObjectWithID(r);
+    return o.refresh().catch(function() {
+      o = b.createObjectWithID(r);
+      o.set('uid', user.getID());
+      o.set('scope', s);
+      o.set('name', n);
+      o.set('datastore', d);
+      return o.saveAllFields().then(function(obj) {
+        o = obj;
+        return kiiSetACLEntry(o, subject.authenticated, action.object.read,  s === 'public');
+      }).then(function() {
+        return kiiSetACLEntry(o, subject.authenticated, action.object.write, false);
+      }).then(function() {
+        return kiiSetACLEntry(o, subject.anonymous,     action.object.read,  false);
+      }).then(function() {
+        return kiiSetACLEntry(o, g,                     action.object.read,  s === 'friends');
+      }).then(function() {
+        return kiiSetACLEntry(o, g,                     action.object.write, false);
+      }).then(function() {
+        return kiiSetACLEntry(o, user,                  action.object.read,  true );
+      }).then(function() {
+        return kiiSetACLEntry(o, user,                  action.object.write, true );
+      }).then(function() {
+        return o;
+      });
+    }).then(function(obj) {
+      s = obj.get('scope');
+      store = admin.bucketWithName(d);
+      dummy = store.createObject();
+      return dummy.save();
+    }).then(function() {
+      return kiiSetACLEntry(store, subject.authenticated, action.bucket.create, false);
+    }).then(function() {
+      return kiiSetACLEntry(store, user,                  action.bucket.create, true );
+    }).then(function() {
+      return kiiSetACLEntry(store, subject.authenticated, action.bucket.query,  s === 'public');
+    }).then(function() {
+      return kiiSetACLEntry(store, subject.anonymous,     action.bucket.query,  false);
+    }).then(function() {
+      return kiiSetACLEntry(store, g,                     action.bucket.query,  s === 'friends');
+    }).then(function() {
+      return kiiSetACLEntry(store, user,                  action.bucket.query,  true );
+    }).then(function() {
+      return kiiSetACLEntry(store, subject.authenticated, action.bucket.drop,   false);
+    }).then(function() {
+      return kiiSetACLEntry(store, user,                  action.bucket.drop,   true );
+    }).then(function() {
+      return kiiSetACLEntry(store, subject.authenticated, action.bucket.read,   s === 'public');
+    }).then(function() {
+      return kiiSetACLEntry(store, g,                     action.bucket.read,   s === 'friends');
+    }).then(function() {
+      return kiiSetACLEntry(store, user,                  action.bucket.read,   true );
+    }).then(function() {
+      return dummy.delete();
+    }).then(function() {
+      done({
+        result: 'ok',
+        scope: s
+      });
+    });
+  }).catch(function() {
+    done({
+      result: 'error',
+      reason: 'failed to invoke Server Code'
+    });
+  });
+}
+
+function unsubscribeDataStore(params, context, done) {
+  return KiiUser.authenticateWithToken(context.getAccessToken()).then(function(user) {
+    var emailRef = Kii.bucketWithName(KII_BUCKET).createObjectWithID(KII_OBJ_EMAIL + user.getID());
+    return kiiUnsubscribeDataStore(emailRef, user).then(function() {
+      done();
+    });
+  }).catch(function() {
+    done();
   });
 }
