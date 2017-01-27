@@ -209,7 +209,7 @@ To register a user as an administrator,
 3. Select *Application Scope* and open *ito* bucket.
 4. Find an object in the bucket which has the member `type` with value `administrators`.
 5. Add the user's uid in an array as `administrators` member in the object, as follows:
-    ```
+    ```json
     {
       "type": "administrators",
       "administrators": [
