@@ -18,10 +18,11 @@
     </template>
   </head>
   <body>
-    <fieldset id="account" disabled>
-      ID (email) <input id="email" size="40" type="email"><br>
-      password <input id="password" size="20" type="password"><br>
-      <button id="signin">Sign In</button>
+    <fieldset id="account">
+      ID (email) <input id="email" size="40" type="email" disabled><br>
+      password <input id="password" size="20" type="password" disabled><br>
+      <button id="signin" disabled>Sign In</button>
+      <button id="signout" disabled>Sign Out</button>
     </fieldset>
     <fieldset id="controller" disabled>
       passcode <input id="passcode" size="8" pattern="^\d{8}$" autocomplete="off">
@@ -34,7 +35,6 @@
         <button id="blue">blue</button>
       </fieldset>
     </fieldset>
-    <div id="clients">
-    </div>
+    <div id="clients"></div>
   </body>
 </html>

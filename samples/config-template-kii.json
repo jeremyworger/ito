@@ -1,0 +1,9 @@
+{
+  "provider": "kii",
+  "settings": {
+    "appId": "your APP ID",
+    "appKey": "your APP KEY",
+    "serverLocation": "your server location (i.e. (US|EU|CN|CN3|SG|JP))",
+    "development": "true if under development environment"
+  }
+}

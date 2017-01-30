@@ -52,11 +52,17 @@ let xhr = new XMLHttpRequest();
 xhr.open('GET', 'config.json');
 xhr.responseType = 'json';
 xhr.onload = () => {
-  ito.init(ito.provider.firebase, xhr.response).then(user => {
-    return user ? null : ito.signIn('anonymous');
-  }).then(() => {
-    document.getElementById('uid').textContent = ito.profile.uid;
-    setTimeout(updatePasscode, 3000);
-  });
+  let provider = xhr.response.provider;
+  let script = document.createElement('script');
+  script.src = '../src/ito-' + provider + '.js';
+  script.onload = () => {
+    ito.init(ito.provider[provider], xhr.response.settings).then(user => {
+      return user ? null : ito.signIn('anonymous');
+    }).then(() => {
+      document.getElementById('uid').textContent = ito.profile.uid;
+      setTimeout(updatePasscode, 3000);
+    });
+  };
+  document.querySelector('head').appendChild(script);
 };
 xhr.send(null);

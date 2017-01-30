@@ -1,14 +1,16 @@
 function change(isSignIn) {
-  let a = document.getElementById('account');
+  let e = document.getElementById('email');
+  let p = document.getElementById('password');
+  let i = document.getElementById('signin');
+  let o = document.getElementById('signout');
   let c = document.getElementById('controller');
 
+  e.disabled = isSignIn;
+  p.disabled = isSignIn;
+  i.disabled = isSignIn;
+  o.disabled = !isSignIn;
+  c.disabled = !isSignIn;
   if(isSignIn) {
-    c.disabled = true;
-    a.disabled = false;
-  }
-  else {
-    c.disabled = false;
-    a.disabled = true;
     setTimeout(() => {
       document.getElementById('passcode').focus();
     }, 10);
@@ -16,12 +18,21 @@ function change(isSignIn) {
 }
 
 document.getElementById('signin').onclick = event => {
-  let e = event.currentTarget;
   let m = document.getElementById('email');
   let p = document.getElementById('password');
-  document.getElementById('account').disabled = true;
+  m.disabled = true;
+  p.disabled = true;
+  document.getElementById('signin').disabled = true;
   ito.signIn('email', m.value, p.value)
-    .then(() => { change(false); }, () => { change(false); });
+    .then(() => { change(true); }, () => { change(false); });
+}
+
+document.getElementById('signout').onclick = event => {
+  document.getElementById('signout').disabled = true;
+  ito.signOut().catch(() => {}).then(() => {
+    change(false);
+    document.getElementById('clients').innerHTML = '';
+  });
 }
 
 function checkPasscode() {
@@ -95,13 +106,19 @@ let xhr = new XMLHttpRequest();
 xhr.open('GET', 'config.json');
 xhr.responseType = 'json';
 xhr.onload = () => {
-  ito.init(ito.provider.firebase, xhr.response).then(user => {
-    if(user) {
-      document.getElementById('email').value = ito.profile.email;
-      change(false);
-    }
-    else
-      change(true);
-  });
+  let provider = xhr.response.provider;
+  let script = document.createElement('script');
+  script.src = '../src/ito-' + provider + '.js';
+  script.onload = () => {
+    ito.init(ito.provider[provider], xhr.response.settings).then(user => {
+      if(user) {
+        document.getElementById('email').value = ito.profile.email;
+        change(true);
+      }
+      else
+        change(false);
+    });
+  };
+  document.querySelector('head').appendChild(script);
 };
 xhr.send(null);
