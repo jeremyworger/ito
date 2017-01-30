@@ -1,6 +1,6 @@
 {
   "name": "ito",
-  "version": "1.0.0",
+  "version": "0.9.0",
   "description": "ito - browser-to-browser communication library",
   "main": "index.js",
   "dependencies": {
@@ -17,6 +17,13 @@
     "type": "git",
     "url": ""
   },
-  "author": "Tomoyuki Shimizu",
+  "author": "KDDI Research, Inc.",
+  "contributors": [
+    {
+      "name": "Tomoyuki Shimizu",
+      "email": "tomoyuki.labs@gmail.com",
+      "url": "https://github.com/tomoyukilabs"
+    }
+  ],
   "license": "Apache-2.0"
 }
