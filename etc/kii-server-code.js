@@ -143,7 +143,7 @@ function restrictItoMessage(params, context, done) {
   var admin = context.getAppAdminContext();
   var object = admin.objectWithURI(params.uri);
   var b = admin.bucketWithName(KII_BUCKET);
-  var p, m;
+  var q, m;
   object.refresh().then(function() {
     return KiiUser.authenticateWithToken(context.getAccessToken()).then(function(user) {
       switch(object.get('type')) {
@@ -170,6 +170,23 @@ function restrictItoMessage(params, context, done) {
         break;
       }
     });
+  }).then(function() {
+    done();
+  }, function() {
+    done();
+  });
+}
+
+function setNotificationTimestamp(params, context, done) {
+  /** @type {KiiAppAdminContext} */
+  var admin = context.getAppAdminContext();
+  var object = admin.objectWithURI(params.uri);
+  object.refresh().then(function() {
+    switch(object.get('type')) {
+    case 'notification':
+      object.set('timestamp', Date.now());
+      return object.save();
+    }
   }).then(function() {
     done();
   }, function() {

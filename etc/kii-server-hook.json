@@ -6,6 +6,13 @@
       "endpoint": "restrictItoMessage"
     }
   ],
+  "kiicloud://buckets/itonotifications": [
+    {
+      "when": "DATA_OBJECT_CREATED",
+      "what": "EXECUTE_SERVER_CODE",
+      "endpoint": "setNotificationTimestamp"
+    }
+  ],
   "kiicloud://scheduler": {
     "check_ping": {
       "cron": "0/1 * * * *",

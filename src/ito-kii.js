@@ -116,16 +116,6 @@
     }
 
     /*
-     * Constant properties
-     */
-    get US()  { return 'US'; }
-    get EU()  { return 'EU'; }
-    get CN()  { return 'CN'; }
-    get CN3() { return 'CN3'; }
-    get SG()  { return 'SG'; }
-    get JP()  { return 'JP'; }
-
-    /*
      * Kii Login
      */
     load(url) {
@@ -177,7 +167,7 @@
       return new Promise((resolve, reject) => {
         development = !!arg && !!arg.development;
         appId = !!arg && arg.appId;
-        Kii.initializeWithSite(appId, arg.appKey, KiiSite[arg.serverLocation]);
+        Kii.initializeWithSite(appId, arg.appKey, KiiSite[arg.serverLocation.toUpperCase()]);
         let type = localStorage.getItem(KII_LOGIN_TYPE);
         let token = type ? localStorage.getItem(KII_LOGIN_TOKEN[type]) : null;
         if(token)
@@ -772,9 +762,15 @@
         KiiClause.equals('rel', 'notification'),
         KiiClause.equals('type', 'notification')
       ));
+      query.sortByAsc('timestamp')
       return notificationBucket.executeQuery(query);
     }).then(params => {
-      provider.onNotification(params[1].map(obj => { return obj.get('data'); }));
+      provider.onNotification(params[1].map(obj => {
+        return {
+          data: obj.get('data'),
+          timestamp: obj.get('timestamp')
+        };
+      }));
     })
   }
 
@@ -1213,7 +1209,10 @@
     let uid = object.get('uid');
     switch(object.get('type')) {
     case 'notification':
-      provider.onNotification([object.get('data')]);
+      provider.onNotification([{
+        data: object.get('data'),
+        timestamp: object.get('timestamp')
+      }]);
       break;
     }
   }

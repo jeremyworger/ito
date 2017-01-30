@@ -33,15 +33,8 @@ ito.init(provider, config, '(optional: SDK URL').then(user => {
 });
 ```
 
-`serverLocation` must be one of the following, corresponding to
-the server location which you have chosen:
-
-* ito.provider.kii.US
-* ito.provider.kii.EU
-* ito.provider.kii.CN
-* ito.provider.kii.CN3
-* ito.provider.kii.SG
-* ito.provider.kii.JP
+`serverLocation` must be `US`, `EU`, `CN`, `CN3`, `SG` or `JP`, corresponding to
+the server location which you have chosen.
 
 Note: *The default value of SDK URL is `KiiSDK.min.js` in the same directory, since
 Kii Cloud SDK is not available via CDN.*
@@ -234,10 +227,12 @@ ito.on('message', event => {
 ```js
 ito.on('notification', event => {
   event.data.forEach(notification => {
+    // notification.data: advertised data
+    // 
     console.log('notification: '
       + (typeof notification.data === 'object' ?
         notification.data.body : notification.data)
-      + ' (at ' + new Date(notification).toLocaleString()));
+      + ' (at ' + new Date(notification.timestamp).toLocaleString()));
   });
 });
 ```
