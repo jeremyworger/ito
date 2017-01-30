@@ -54,27 +54,17 @@
 
   let appId = null;
 
-  /** @type {?KiiGroup} */
   let friendsGroup = null;
-  /** @type {?KiiBucket} */
   let itoBucket = null;
-  /** @type {?KiiBucket} */
   let notificationBucket = null;
-  /** @type {?KiiBucket} */
   let friendsBucket = null;
-  /** @type {?KiiBucket} */
   let profileBucket = null;
-  /** @type {?KiiBucket} */
   let dataStoreRefBucket = null;
-  /** @type {?KiiObject} */
   let profileRef = null;
-  /** @type {?KiiObject} */
   let passcodeRef = null;
-  /** @type {?KiiObject} */
   let emailRef = null;
   let friendsRef = {};
   let ping = null;
-  /** @type {Array<string>} */
   let pendingRequests = [];
 
   let mqttClient = null;
@@ -82,16 +72,12 @@
   let funcQueue = [];
   let resolveQueue = [];
 
-  /** @type {boolean} */
   let development = true;
-  /** @type {boolean} */
   let isOnline = false;
   let email = null;
   let userName = null;
 
-  /** @type {boolean} */
   let isAdmin = false;
-  /** @type {KiiUser} */
   let currentUser = null;
 
   let passcode = null;
@@ -203,7 +189,6 @@
       });
     }
 
-    /** @return {KiiUser} */
     getUser() {
       let user = getUser();
       return user ? {
@@ -363,7 +348,6 @@
       let user = getUser();
       return friendsRef[uid] ? (
         kiiRemoveFriend(uid).then(() => {
-          /** @type {KiiBucket} */
           let bucket = friendsRef[uid].friendsBucket;
           let msg = bucket.createObject();
           msg.set('type', 'remove');
@@ -559,8 +543,6 @@
   /*
    * Kii Cloud: Login
    */
-
-  /** @return {KiiUser} */
   function getUser() {
     return currentUser;
   }
@@ -690,9 +672,7 @@
     });
   }
 
-  /** @param {KiiObject} data */
   function kiiPutMessageObject(uid, data) {
-    /** @type {KiiBucket} */
     let bucket = friendsRef[uid].friendsBucket;
     if(!bucket)
       return Promise.reject(new Error('no such friend: ' + uid));
@@ -707,7 +687,6 @@
     });
   }
 
-  /** @param {KiiObject} object */
   function kiiConvertObject(object) {
     return object.getKeys().reduce((a, b) => {
       a[b] = object.get(b);
@@ -805,12 +784,10 @@
     }));
   }
 
-  /** @param {KiiObject} object */
   function kiiObjectURIToKey(object) {
     return object.objectURI().replace(/^kiicloud:\/\/groups\/(.*?)\/.*\/(.*)$/, '$1/$2');
   }
 
-  /** @param {KiiObject} data */
   function kiiOnRequest(data) {
     let user = getUser();
     let type = data.get('type');
@@ -859,7 +836,6 @@
     }
   }
 
-  /** @param {KiiObject} data */
   function kiiOnUpdate(data) {
     let user = getUser();
     let type = data.get('type');
@@ -927,7 +903,6 @@
           let object = KiiObject.objectWithURI(body.sourceURI);
           let i;
           if(body.objectID.match(new RegExp('^' + KII_BUCKET_DATASTORE))) {
-            console.log('datastore', body);
             switch(body.type) {
             case 'DATA_OBJECT_CREATED':
               object.refresh().then(obj => {
@@ -1036,7 +1011,6 @@
     }
   }
 
-  /** @param {KiiGroup} group */
   function kiiSetFriendChangedRef(uid) {
     let user = getUser();
     return kiiSetFriendRef(uid).then(result => {
@@ -1111,7 +1085,6 @@
   }
 
   function kiiUnsubscribePush(target) {
-    console.log('unsubscribe');
     let user = getUser();
     return user.pushSubscription().isSubscribed(target).then(params => {
       if(params[2])
@@ -1213,7 +1186,6 @@
   /*
    * Kii Cloud: Chat Messages
    */
-  /** @param {KiiObject} object */
   function kiiDispatchMessageObject(object) {
     let uid = object.get('uid');
     switch(object.get('type')) {
@@ -1249,7 +1221,6 @@
   /*
    * Kii Cloud: WebRTC Signaling Messages
    */
-  /** @param {KiiObject} object */
   function kiiDispatchSignalingObject(object) {
     const key = object.get('cid') || kiiObjectURIToKey(object);
     let v = kiiConvertObject(object);
