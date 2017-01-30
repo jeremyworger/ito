@@ -9,6 +9,7 @@ var KII_OBJ_EMAIL            = 'itoemail_';
 var KII_OBJ_PASSCODE         = 'itopasscode_';
 var KII_OBJ_PROFILE          = KII_BUCKET_PROFILE + '_';
 var KII_OBJ_DATASTORE_REF    = KII_BUCKET_DATASTORE_REF + '_';
+var KII_PROP_DATAOBSERVER    = 'dataobserver';
 
 var subject = {
   anonymous: new KiiAnonymousUser(),
@@ -124,14 +125,14 @@ function kiiUnsubscribeDataStore(ref, user) {
   if(!(ref instanceof KiiObject))
     return;
   return ref.refresh().then(function(obj) {
-    var l = obj.get('dataobserver');
+    var l = obj.get(KII_PROP_DATAOBSERVER);
     return l.reduce(function(p, d) {
       return p.then(function() {
         var b = Kii.bucketWithName(d);
         return user.pushSubscription().unsubscribe(b).catch(function() {});
       });
     }, Promise.resolve()).then(function() {
-      ref.set('dataobserver', []);
+      ref.set(KII_PROP_DATAOBSERVER, []);
       return ref.save();
     });
   });

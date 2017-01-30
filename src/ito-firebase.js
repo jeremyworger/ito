@@ -520,7 +520,7 @@
       });
     }
 
-    putDataElement(name, key, data) {
+    putDataElement(name, key, data, scope) {
       let user = getUser();
       let ref = firebase.database().ref(
         'datastore/' + user.uid + '/' + name + '/' + key);

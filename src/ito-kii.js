@@ -44,6 +44,7 @@
   const KII_OBJ_PASSCODE         = 'itopasscode_';
   const KII_OBJ_PROFILE          = KII_BUCKET_PROFILE + '_';
   const KII_OBJ_DATASTORE_REF    = KII_BUCKET_DATASTORE_REF + '_';
+  const KII_PROP_DATAOBSERVER    = 'dataobserver';
 
   const KII_SUB = {};
   const KII_ACTION = {
@@ -499,11 +500,12 @@
       });
     }
 
-    putDataElement(name, key, data) {
+    putDataElement(name, key, data, scope) {
       return kiiPushQueue(kiiPutDataElement, {
         name: name,
         key: key,
-        data: data
+        data: data,
+        scope: scope
       });
     }
 
@@ -538,9 +540,13 @@
         uid: uid,
         name: name
       });
-    };
+    }
 
     disconnectDataStoreObserver(uid, name) {
+      return kiiPushQueue(kiiDisconnectDataStoreObserver, {
+        uid: uid,
+        name: name
+      });
     }
   }
   let provider = new KiiProvider(self.ito);
@@ -921,6 +927,7 @@
           let object = KiiObject.objectWithURI(body.sourceURI);
           let i;
           if(body.objectID.match(new RegExp('^' + KII_BUCKET_DATASTORE))) {
+            console.log('datastore', body);
             switch(body.type) {
             case 'DATA_OBJECT_CREATED':
               object.refresh().then(obj => {
@@ -933,7 +940,7 @@
               });
               break;
             case 'DATA_OBJECT_DELETED':
-              kiiObserveDataElementRemove(obj, body.bucketID);
+              kiiObserveDataElementRemove(object, body.bucketID);
               break;
             }
           }
@@ -1015,7 +1022,7 @@
     emailRef.set('email', email);
     emailRef.set('group', friendsGroup.getID());
     emailRef.set('status', 'online');
-    emailRef.set('dataobserver', []);
+    emailRef.set(KII_PROP_DATAOBSERVER, []);
     return emailRef.saveAllFields().then(() => {
       return !created ? kiiSetAppScopeObjectACL(emailRef, true) : Promise.resolve();
     });
@@ -1320,6 +1327,7 @@
   function kiiPutDataElement(arg) {
     const key = arg.key;
     const data = arg.data;
+    const scope = arg.scope;
     let ref = dataStoreRef[arg.name];
     if(!ref)
       return Promise.reject(new Error('no such data store'));
@@ -1332,7 +1340,17 @@
     else {
       element = ref.bucket.createObjectWithID(ref.bucket.getBucketName() + '_' + key);
       element.set('data', data);
-      return element.saveAllFields();
+      return element.saveAllFields().then(() => {
+        return scope !== 'public' ?
+               kiiSetACLEntry(element, KII_SUB.AUTHENTICATED, KII_ACTION.OBJECT.READ,  false) : Promise.resolve();
+      }).then(() => {
+        return kiiSetACLEntry(element, KII_SUB.ANONYMOUS,     KII_ACTION.OBJECT.READ,  false);
+      }).then(() => {
+        return scope === 'friends' ?
+               kiiSetACLEntry(element, friendsGroup,          KII_ACTION.OBJECT.READ,  true ) : Promise.resolve();
+      }).then(() => {
+        return kiiSetACLEntry(element, KII_SUB.AUTHENTICATED, KII_ACTION.OBJECT.WRITE, false);
+      });
     }
   }
 
@@ -1402,9 +1420,9 @@
     let store;
     return storeRef.refresh().then(obj => {
       store = Kii.bucketWithName(obj.get('datastore')); 
-      let observers = emailRef.get('dataobserver');
+      let observers = emailRef.get(KII_PROP_DATAOBSERVER);
       observers.push(store.getBucketName());
-      emailRef.set('dataobserver', observers);
+      emailRef.set(KII_PROP_DATAOBSERVER, observers);
       return emailRef.save();
     }).then(() => {
       return kiiSubscribePush(store);
@@ -1416,6 +1434,20 @@
   }
 
   function kiiDisconnectDataStoreObserver(arg) {
+    let store = Kii.bucketWithName(KII_BUCKET_DATASTORE + kiiEncodeUserID(arg.uid) + '_' + arg.name);
+    return kiiUnsubscribePush(store).then(() => {
+      return emailRef.refresh();
+    }).then(obj => {
+      let list = obj.get(KII_PROP_DATAOBSERVER);
+      let i = list.indexOf(store.getBucketName());
+      if(i >= 0) {
+        list.splice(i, 1);
+        emailRef.set(KII_PROP_DATAOBSERVER, list);
+        return emailRef.save();
+      }
+    }).catch(() => {
+      throw new Error('cannot unsubscribe the data store: ' + arg.name);
+    });
   }
 
   function kiiBase64ToUUID(ref) {
@@ -1436,27 +1468,26 @@
   }
 
   function kiiDecodeDataStoreRef(ref, bucket) {
-    console.log(ref);
     const r = bucket.replace(new RegExp('^' + KII_BUCKET_DATASTORE), '');
     const uid = kiiBase64ToUUID(r.substr(0, 22));
     const name = r.substr(23);
-    const key = ref.replace(new RegExp('^' + bucket), '');    
-    console.log(uid, name, key);
+    const key = ref.replace(new RegExp('^' + bucket + '_'), '');    
+    return { uid: uid, name: name, key: key };
   }
 
   function kiiObserveDataElementAdd(object, bucket) {
     let arg = kiiDecodeDataStoreRef(object.getID(), bucket);
-    console.log('add', object);
+    provider.onElementAdd(arg.uid, arg.name, arg.key, object.get('data'));
   }
 
   function kiiObserveDataElementUpdate(object, bucket) {
     let arg = kiiDecodeDataStoreRef(object.getID(), bucket);
-    console.log('update', object);
+    provider.onElementUpdate(arg.uid, arg.name, arg.key, object.get('data'));
   }
 
   function kiiObserveDataElementRemove(object, bucket) {
     let arg = kiiDecodeDataStoreRef(object.getID(), bucket);
-    console.log('remove', object);
+    provider.onElementRemove(arg.uid, arg.name, arg.key);
   }
 
   if(isBrowser) {

@@ -98,6 +98,7 @@ const KII_OBJ_EMAIL            = 'itoemail_';
 const KII_OBJ_PASSCODE         = 'itopasscode_';
 const KII_OBJ_PROFILE          = KII_BUCKET_PROFILE + '_';
 const KII_OBJ_DATASTORE_REF    = KII_BUCKET_DATASTORE_REF + '_';
+const KII_PROP_DATAOBSERVER    = 'dataobserver';
 
 const action = {
   bucket: {

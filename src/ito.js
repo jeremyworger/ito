@@ -1037,7 +1037,7 @@
     put(key, data) {
       if (!this.scope)
         return Promise.reject(new Error('the data store is already reset.'));
-      return provider.putDataElement(this.name, key, data);
+      return provider.putDataElement(this.name, key, data, this.scope);
     }
 
     get(key) {
