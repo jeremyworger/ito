@@ -1288,8 +1288,10 @@
     const name = arg.name;
     const refid = KII_OBJ_DATASTORE_REF + uid + '_' + name;
     let ref = dataStoreRefBucket.createObjectWithID(refid);
-    delete dataStoreRef[name];
-    return ref.delete().then(() => {
+    return kiiRemoveAllDataElements(arg).then(() => {
+      delete dataStoreRef[name];
+      return ref.delete();
+    }).then(() => {
       let store = Kii.bucketWithName(KII_BUCKET_DATASTORE + kiiEncodeUserID(uid) + '_' + name);
       return store.delete();
     });
@@ -1310,17 +1312,25 @@
     }
     else {
       element = ref.bucket.createObjectWithID(ref.bucket.getBucketName() + '_' + key);
-      element.set('data', data);
-      return element.saveAllFields().then(() => {
-        return scope !== 'public' ?
-               kiiSetACLEntry(element, KII_SUB.AUTHENTICATED, KII_ACTION.OBJECT.READ,  false) : Promise.resolve();
-      }).then(() => {
-        return kiiSetACLEntry(element, KII_SUB.ANONYMOUS,     KII_ACTION.OBJECT.READ,  false);
-      }).then(() => {
-        return scope === 'friends' ?
-               kiiSetACLEntry(element, friendsGroup,          KII_ACTION.OBJECT.READ,  true ) : Promise.resolve();
-      }).then(() => {
-        return kiiSetACLEntry(element, KII_SUB.AUTHENTICATED, KII_ACTION.OBJECT.WRITE, false);
+      return element.refresh().then(obj => {
+        element.set('data', data);
+        return element.save().then(obj => {
+          ref.elements[key] = obj;
+        });
+      }, () => {
+        element.set('data', data);
+        return element.saveAllFields().then(() => {
+          ref.elements[key] = element;
+          return scope !== 'public' ?
+                 kiiSetACLEntry(element, KII_SUB.AUTHENTICATED, KII_ACTION.OBJECT.READ,  false) : Promise.resolve();
+        }).then(() => {
+          return kiiSetACLEntry(element, KII_SUB.ANONYMOUS,     KII_ACTION.OBJECT.READ,  false);
+        }).then(() => {
+          return scope === 'friends' ?
+                 kiiSetACLEntry(element, friendsGroup,          KII_ACTION.OBJECT.READ,  true ) : Promise.resolve();
+        }).then(() => {
+          return kiiSetACLEntry(element, KII_SUB.AUTHENTICATED, KII_ACTION.OBJECT.WRITE, false);
+        });
       });
     }
   }
