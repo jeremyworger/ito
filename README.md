@@ -5,9 +5,9 @@
 which is intended to work on devices without an input human interface
 like keyboard or mouse, of course as well as PCs, smartphones and tablets.
 
-This library is composed of two parts; application and backend interfaces.
-While the backend interface can be implemented for various kinds of backend
-services, only Firebase is currently supported.
+This library is composed of two parts; application and backend interfaces;
+[Firebase](https://firebase.google.com) and [Kii Cloud](https://www.kii.com/)
+are supported currently.
 
 "ito" is a Japanese word "糸" which means "*string*", "*thread*" or "*yarn*",
 and is also an anagram of "*IoT*". 
