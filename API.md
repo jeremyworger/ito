@@ -26,10 +26,10 @@ const config = {
   serverLocation: /* see below */,
   development: /* true if under development environment, otherwise false */,
   login: { /* this property is unnecessary if your application does not use account integration */
-    "redirectUri": "(URL of your login dialog page (copied from src/dialog.html) beginning with https:// or http:// (if needed))",
-    "clientIds": {
-      "facebook": "your Facebook OAuth client_id (if needed)",
-      "google": "your Google OAuth client_id (if needed)"
+    redirectUri: "(URL of your login dialog page (copied from src/dialog.html) beginning with https:// or http:// (if needed))",
+    clientIds: {
+      facebook: "your Facebook OAuth client_id (if needed)",
+      google: "your Google OAuth client_id (if needed)"
     }
   }
 };
