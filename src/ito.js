@@ -506,7 +506,12 @@
             provider.onOnline(b);
             resolve(p.getUser());
           }, error => {
-            reject(error);
+            if(error === true) {
+              provider.onOnline(false);
+              reject('duplicated sign-in');
+            }
+            else
+              reject(error);
           });
         }
       });
@@ -534,10 +539,10 @@
                 state = 'online';
                 resolve(u);
               }, error => {
-                reject(new Error(error));
+                reject(error === true ? new Error('duplicated sign-in') : error);
               });
             else
-              reject('auth provider is not indicated or wrong');
+              reject(new Error('auth provider is not indicated or wrong'));
             break;
         }
       })

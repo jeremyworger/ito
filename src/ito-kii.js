@@ -64,6 +64,8 @@
   };
   const LOGIN_VERIFY = {};
 
+  const ERR_DUPLICATE_LOGIN      = 'itoduplicatelogin';
+
   let appId = null;
   let loginOpt = {};
 
@@ -217,7 +219,11 @@
         if(token)
           KiiUser.authenticateWithToken(token)
             .then(kiiGetProfile)
-            .then(prof => { resolve(true); });
+            .then(prof => {
+              resolve(true);
+            }, e => {
+              reject(e === ERR_DUPLICATE_LOGIN ?  true : e);
+            });
         else
           resolve(false);
       });
@@ -630,6 +636,8 @@
       return profileRef.save();
     }).then(() => {
       return prof;
+    }, e => {
+      return Promise.reject(e === ERR_DUPLICATE_LOGIN ? true : e);
     });
   }
 
@@ -651,9 +659,7 @@
           profileRef.set(i, prof[i]);
         });
         return profileRef.save();
-      }).then(() => {
-        resolve(prof);
-      })
+      }).then(() => { resolve(prof); }, e => { reject(e); })
     });
   }
 
@@ -1160,7 +1166,7 @@
 
   function kiiOnOnline() {
     let user = getUser();
-    return kiiInitMqttClient().then(kiiInitGroup).then(() => {
+    return kiiInitGroup().then(() => {
       itoBucket = Kii.bucketWithName(KII_BUCKET);
       notificationBucket = Kii.bucketWithName(KII_BUCKET_NOTIFICATIONS);
       dataStoreRefBucket = Kii.bucketWithName(KII_BUCKET_DATASTORE_REF);
@@ -1171,27 +1177,36 @@
         return kiiInitProfileRef();
       });
     }).then(() => {
-      return kiiSubscribePush(friendsBucket);
-    }).then(() => {
-      return kiiSubscribePush(notificationBucket);
-    }).then(() => {
-      return kiiCheckAdministrator();
-    }).then(() => {
-      return Kii.serverCodeEntry('unsubscribeDataStore').execute({ a: 0 });
-    }).then(() => {
-      emailRef = itoBucket.createObjectWithID(KII_OBJ_EMAIL + user.getID());
-      return emailRef.refresh().catch(() => {}).then(kiiSetEmailRef);
-    }).then(() => {
-      passcodeRef = itoBucket.createObjectWithID(KII_OBJ_PASSCODE + user.getID());
-      return passcodeRef.refresh().then(obj => {
-        passcode = obj.get('passcode');
-      }, () => { passcodeRef = null; });
-    }).then(() => {
-      return kiiPushQueue( passcode ? kiiSetPasscodeRef : kiiResetPasscodeRef );
-    }).then(kiiCheckAll)
-    .then(() => {
-      if(!ping)
-        ping = setInterval(kiiPing, 5000);
+      return profileRef.get('status') === 'online' ? Promise.resolve().then(() => {
+        KiiUser.logOut();
+        userName = null;
+        email = null;
+        currentUser = null;
+        isOnline = false;
+        throw ERR_DUPLICATE_LOGIN;
+      }) : kiiInitMqttClient().then(() => {
+        return kiiSubscribePush(friendsBucket);
+      }).then(() => {
+        return kiiSubscribePush(notificationBucket);
+      }).then(() => {
+        return kiiCheckAdministrator();
+      }).then(() => {
+        return Kii.serverCodeEntry('unsubscribeDataStore').execute({ a: 0 });
+      }).then(() => {
+        emailRef = itoBucket.createObjectWithID(KII_OBJ_EMAIL + user.getID());
+        return emailRef.refresh().catch(() => {}).then(kiiSetEmailRef);
+      }).then(() => {
+        passcodeRef = itoBucket.createObjectWithID(KII_OBJ_PASSCODE + user.getID());
+        return passcodeRef.refresh().then(obj => {
+          passcode = obj.get('passcode');
+        }, () => { passcodeRef = null; });
+      }).then(() => {
+        return kiiPushQueue( passcode ? kiiSetPasscodeRef : kiiResetPasscodeRef );
+      }).then(kiiCheckAll)
+      .then(() => {
+        if(!ping)
+          ping = setInterval(kiiPing, 5000);
+      });
     });
   }
 
@@ -1547,7 +1562,7 @@
     });
 
     window.addEventListener('online', () => {
-      isOnline = true;
+      isOnline = !!getUser();
       kiiRefreshAll();
       kiiSetPing();
       kiiShiftQueue();
