@@ -32,6 +32,49 @@
     self.localStorage = new LocalStorage('./localStorage');
   }
 
+
+  /*
+   * Simple fetch polyfill
+   */
+  if(isBrowser && !window.fetch) {
+    window.fetch = (url, opt) => {
+      let xhr = new XMLHttpRequest();
+      opt = opt || {};
+      return new Promise((resolve, reject) => {
+        xhr.open(opt.method || 'GET', url);
+        if(opt.headers) {
+          let h = opt.headers;
+          Object.keys(h).forEach(i => {
+            xhr.setRequestHeader(i, h[i]);
+          });
+        }
+        xhr.withCredentials = (opt.mode && opt.mode !== 'omit');
+        xhr.responseType = 'arraybuffer';
+        xhr.onerror = reject;
+        xhr.onload = () => {
+          let toText = a => {
+            return new Uint8Array(a).reduce((s, c) => s + String.fromCharCode(c), '');
+          };
+          resolve({
+            text: () => {
+              return Promise.resolve(toText(xhr.response));
+            },
+            json: () => {
+              return new Promise(r => JSON.parse(toText(xhr.response)));
+            },
+            arrayBuffer: () => {
+              return Promise.resolve(xhr.response);
+            },
+            blob: () => {
+              return Promise.resolve(new Blob([xhr.response]));
+            }
+          });
+        };
+        xhr.send(opt.body || null);
+      });
+    };
+  }
+
   /*
    * Global variables
    */
