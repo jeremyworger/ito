@@ -31,7 +31,9 @@
   const KII_LOGIN_TYPE           = 'ito.provider.kii.login.type';
   const KII_LOGIN_TOKEN          = {
     anonymous: 'ito.provider.kii.loginToken.anonymous',
-    email:     'ito.provider.kii.loginToken.email'
+    facebook:  'ito.provider.kii.loginToken.facebook',
+    google:    'ito.provider.kii.loginToken.google',
+    email:     'ito.provider.kii.loginToken.email',
   };
   const KII_GROUP_FRIENDS        = 'itofriends';
   const KII_BUCKET               = 'ito';
@@ -52,7 +54,18 @@
     OBJECT: {}
   };
 
+  const LOGIN_DIALOG = {
+    facebook: 'http://www.facebook.com/v2.8/dialog/oauth',
+    google:   'https://accounts.google.com/o/oauth2/v2/auth'
+  };
+  const LOGIN_SCOPE = {
+    facebook: 'public_profile+email',
+    google: 'profile+email'
+  };
+  const LOGIN_VERIFY = {};
+
   let appId = null;
+  let loginOpt = {};
 
   let friendsGroup = null;
   let itoBucket = null;
@@ -101,6 +114,36 @@
             return kiiSetProfile();
           });
         },
+        facebook: () => {
+          return kiiOpenLoginDialog('facebook').then(c => {
+            return KiiSocialConnect.logIn(KiiSocialNetworkName.FACEBOOK, {
+              'access_token': c
+            });
+          }).then(params => {
+            currentUser = params[0];
+            let user = getUser();
+            localStorage.setItem(KII_LOGIN_TYPE, 'facebook');
+            localStorage.setItem(KII_LOGIN_TOKEN['facebook'], user.getAccessToken());
+            email = user.getEmailAddress() || user.getID();
+            isOnline = true;
+            return kiiSetProfile();
+          });
+        },
+        google: () => {
+          return kiiOpenLoginDialog('google').then(c => {
+            return KiiSocialConnect.logIn(KiiSocialNetworkName.GOOGLEPLUS, {
+              'access_token': c
+            });
+          }).then(params => {
+            currentUser = params[0];
+            let user = getUser();
+            localStorage.setItem(KII_LOGIN_TYPE, 'google');
+            localStorage.setItem(KII_LOGIN_TOKEN['google'], user.getAccessToken());
+            email = user.getEmailAddress() || user.getID();
+            isOnline = true;
+            return kiiSetProfile();
+          });
+        },
         email: (id, pass) => {
           return KiiUser.authenticate(id, pass).then(() => {
             currentUser = KiiUser.getCurrentUser();
@@ -130,7 +173,7 @@
             s.addEventListener('load', () => {
               // constant values
               KII_SUB.ANONYMOUS        = new KiiAnonymousUser();
-              KII_SUB.AUTHENTICATED    = new KiiAnyAuthenticatedUser();
+              KII_SUB.AUTHENTICATED    = new KiiAnyAuthenticatedUser()
               KII_ACTION.BUCKET.CREATE = KiiACLAction.KiiACLBucketActionCreateObjects;
               KII_ACTION.BUCKET.QUERY  = KiiACLAction.KiiACLBucketActionQueryObjects;
               KII_ACTION.BUCKET.DROP   = KiiACLAction.KiiACLBucketActionDropBucket;
@@ -166,7 +209,8 @@
     init(arg) {
       return new Promise((resolve, reject) => {
         development = !!arg && !!arg.development;
-        appId = !!arg && arg.appId;
+        appId = arg && arg.appId;
+        loginOpt = arg && typeof arg.login === 'object' ? arg.login : {};
         Kii.initializeWithSite(appId, arg.appKey, KiiSite[arg.serverLocation.toUpperCase()]);
         let type = localStorage.getItem(KII_LOGIN_TYPE);
         let token = type ? localStorage.getItem(KII_LOGIN_TOKEN[type]) : null;
@@ -537,18 +581,33 @@
     return currentUser;
   }
 
-  function kiiGenerateRandomString(l) {
-    return crypto.getRandomValues(new Uint8Array(l)).reduce((a,b)=>{
-      let c = '0' + b.toString(16);
-      return a + c.substr(c.length-2);
-    }, '');
-  }
-
-  function kiiCreateAnonymousUser() {
-    let name = 'user_' + kiiGenerateRandomString(16);
-    let password = kiiGenerateRandomString(24);
-    let user = KiiUser.userWithUsername(name, password);
-    return user.register().catch(kiiCreateAnonymousUser);
+  function kiiOpenLoginDialog(login) {
+    return new Promise((resolve, reject) => {
+      let s = btoa(crypto.getRandomValues(new Uint8Array(32)).reduce((s, c) => s + String.fromCharCode(c), ''))
+                .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      let w = window.open(
+        LOGIN_DIALOG[login] +
+        '?client_id=' + loginOpt.clientIds[login] +
+        '&scope=' + LOGIN_SCOPE[login] +
+        '&state=' + login + '+' + s +
+        '&redirect_uri=' + loginOpt.redirectUri +
+        '&response_type=token'
+      );
+      let c = evt => {
+        if(evt.origin === location.origin && evt.source === w) {
+          let d = evt.data.split('&').reduce((r, i) => {
+            let j = i.split('=');
+            r[j[0]] = j[1];
+            return r;
+          }, {});
+          if(!d.state || d.state !== login + '+' + s)
+            reject(new Error('Unexpected OAuth state parameter returned'));
+          resolve(d['access_token']);
+        }
+        window.removeEventListener(c);
+      };
+      window.addEventListener('message', c);
+    });
   }
 
   /*

@@ -24,7 +24,14 @@ const config = {
   appId: "(your APP ID)",
   appKey: "(your APP KEY)",
   serverLocation: /* see below */,
-  development: /* true if under development environment, otherwise false */
+  development: /* true if under development environment, otherwise false */,
+  login: { /* this property is unnecessary if your application does not use account integration */
+    "redirectUri": "(URL of your login dialog page (copied from src/dialog.html) beginning with https:// or http:// (if needed))",
+    "clientIds": {
+      "facebook": "your Facebook OAuth client_id (if needed)",
+      "google": "your Google OAuth client_id (if needed)"
+    }
+  }
 };
 
 ito.init(provider, config, '(optional: SDK URL').then(user => {
@@ -52,8 +59,8 @@ ito.signIn('(sign-in type)').then(user => {
 *sign-in type* must be one of the following:
 
 * `anonymous` [Firebase, Kii Cloud]: an anonymous account, valid until signed out
-* `google` [Firebase]: (browsers only) a Google account
-* `facebook` [Firebase]: (browsers only) a Facebook account
+* `google` [Firebase, Kii Cloud]: (browsers only) a Google account
+* `facebook` [Firebase, Kii Cloud]: (browsers only) a Facebook account
 * `email` [Firebase, Kii Cloud]: an account with e-mail and password (see below)
 
 ### Create an account with E-mail and Password (Firebase, Kii Cloud)
