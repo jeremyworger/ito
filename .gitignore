@@ -1,6 +1,7 @@
 .gitignore
 .DS_Store
 .vscode/
+KiiSDK.min.js
 node_modules
 work
 samples/config.json

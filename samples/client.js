@@ -1,4 +1,4 @@
-let passcode, hasController = false;
+var passcode, hasController = false;
 
 function updatePasscode() {
   if(hasController)
