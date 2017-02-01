@@ -1,12 +1,16 @@
+var provider;
+
 function change(isSignIn) {
   let e = document.getElementById('email');
   let p = document.getElementById('password');
+  let a = document.getElementById('create');
   let i = document.getElementById('signin');
   let o = document.getElementById('signout');
   let c = document.getElementById('controller');
 
   e.disabled = isSignIn;
   p.disabled = isSignIn;
+  a.disabled = isSignIn;
   i.disabled = isSignIn;
   o.disabled = !isSignIn;
   c.disabled = !isSignIn;
@@ -17,15 +21,29 @@ function change(isSignIn) {
   }
 }
 
+document.getElementById('create').onclick = event => {
+  let m = document.getElementById('email');
+  let p = document.getElementById('password');
+  m.disabled = true;
+  p.disabled = true;
+  document.getElementById('create').disabled = true;
+  document.getElementById('signin').disabled = true;
+  ito.provider[provider].createUser(m.value, p.value).then(u => {
+    return ito.signIn('email', m.value, p.value)
+      .then(() => { change(true); }, () => { change(false); });
+  }, () => { change(false); });
+};
+
 document.getElementById('signin').onclick = event => {
   let m = document.getElementById('email');
   let p = document.getElementById('password');
   m.disabled = true;
   p.disabled = true;
+  document.getElementById('create').disabled = true;
   document.getElementById('signin').disabled = true;
   ito.signIn('email', m.value, p.value)
     .then(() => { change(true); }, () => { change(false); });
-}
+};
 
 document.getElementById('signout').onclick = event => {
   document.getElementById('signout').disabled = true;
@@ -33,7 +51,7 @@ document.getElementById('signout').onclick = event => {
     change(false);
     document.getElementById('clients').innerHTML = '';
   });
-}
+};
 
 function checkPasscode() {
   let e = document.getElementById('passcode');
@@ -106,7 +124,7 @@ let xhr = new XMLHttpRequest();
 xhr.open('GET', 'config.json');
 xhr.responseType = 'json';
 xhr.onload = () => {
-  let provider = xhr.response.provider;
+  provider = xhr.response.provider;
   let script = document.createElement('script');
   script.src = '../src/ito-' + provider + '.js';
   script.onload = () => {
