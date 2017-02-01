@@ -250,7 +250,7 @@
           email = user.getEmailAddress() || user.getID();
           return kiiSetProfile(true);
         }).then(p => {
-          this.signOut().then(() => {
+          return this.signOut().then(() => {
             return p;
           });
         });
@@ -696,7 +696,7 @@
   }
 
   function kiiShiftQueue() {
-    if(isOnline) {
+    if(KiiUser.loggedIn() && navigator.onLine) {
       let f = funcQueue.shift();
       return f ? f.func(f.arg).then(result => {
         return (resolveQueue.shift().resolve(result));
