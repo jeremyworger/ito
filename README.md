@@ -19,6 +19,14 @@ Copyright (c) 2017 [KDDI Research, Inc.](http://www.kddi-research.jp)
 Use of source code of this software is governed by Apache License, Version 2.0,
 that can be found in [LICENSE](LICENSE) file.
 
+## Notice
+
+When using this library, you MUST follow Terms of Service for each backend service
+which you use with this library:
+
+* [Terms of Service for Firebase Services](https://firebase.google.com/terms/)
+* [Terms of Use | Kii](https://en.kii.com/terms/)
+
 # Functional Features
 
 ito provides web applications running on browosers and web servers running on
