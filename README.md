@@ -41,6 +41,8 @@ Node.js with the following features:
 # Prerequisites
 
 * Browser or Node.js, compatible with ES2015(ES6)
+  * If you need to run your web application on an ES5 environment,
+  please use `src-es5/ito*.js` files converted (transpiled) into ES5.
 * WebRTC compatibility (when using WebRTC peer-to-peer communication)
 * A developer account for one of the following backend service(s):
   * [Firebase](https://firebase.google.com)
