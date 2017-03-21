@@ -5,7 +5,10 @@
 which is intended to work on devices without an input human interface
 like keyboard or mouse, of course as well as PCs, smartphones and tablets.
 
-This library is composed of two parts; application and backend interfaces;
+This library is composed of two layers; application and backend interface layers.
+The application interface layer provides a set of APIs for JavaScript-based
+web applications. The backend interface layer works as a bridge between the
+application interface and a backend service. As a backend service,
 [Firebase](https://firebase.google.com) and [Kii Cloud](https://www.kii.com/)
 are supported currently.
 
