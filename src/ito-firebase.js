@@ -312,7 +312,7 @@
     }
 
     dropRequest(key, passcode) {
-      dropRequest(key, passcode);
+      return dropRequest(key, passcode);
     }
 
     acceptRequest(key, m, uid, usePasscode) {
