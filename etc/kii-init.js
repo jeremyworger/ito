@@ -1,3 +1,12 @@
+/**
+ * ito.js
+ * 
+ * Copyright 2017 KDDI Research, Inc.
+ * 
+ * This software is released under the MIT License.
+ * http://opensource.org/licenses/mit-license.php
+ */
+
 'use strict';
 
 const kii = require('kii-cloud-sdk').create();

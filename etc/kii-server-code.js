@@ -1,3 +1,12 @@
+/**
+ * ito.js
+ * 
+ * Copyright 2017 KDDI Research, Inc.
+ * 
+ * This software is released under the MIT License.
+ * http://opensource.org/licenses/mit-license.php
+ */
+
 var KII_GROUP_FRIENDS        = 'itofriends';
 var KII_BUCKET               = 'ito';
 var KII_BUCKET_NOTIFICATIONS = 'itonotifications';

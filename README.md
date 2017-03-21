@@ -16,8 +16,7 @@ and is also an anagram of "*IoT*".
 
 Copyright (c) 2017 [KDDI Research, Inc.](http://www.kddi-research.jp)
 
-Use of source code of this software is governed by Apache License, Version 2.0,
-that can be found in [LICENSE](LICENSE) file.
+This software is released under the MIT License, see [LICENSE](LICENSE) file.
 
 ## Notice
 
