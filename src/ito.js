@@ -10,16 +10,7 @@
 'use strict';
 
 ((self, isBrowser) => {
-  if (isBrowser) {
-    self.RTCPeerConnection =
-      self.RTCPeerConnection ||
-      self.webkitRTCPeerConnection ||
-      self.mozRTCPeerConnection;
-    self.MediaStream =
-      self.MediaStream ||
-      self.webkitMediaStream;
-  }
-  else {
+  if (!isBrowser) {
     // node-localstorage
     let LocalStorage = require('node-localstorage').LocalStorage;
     self.localStorage = new LocalStorage('./localStorage');
@@ -493,19 +484,27 @@
           reject(new Error('Incorrect Provider'));
         else {
           provider = p;
-          p.load(url).then(() => {
-            return p.init(arg);
-          }).then(b => {
-            provider.onOnline(b);
-            resolve(p.getUser());
-          }, error => {
-            if(error === true) {
-              provider.onOnline(false);
-              reject('duplicated sign-in');
-            }
-            else
-              reject(error);
-          });
+
+          // load WebRTC adapter
+          const adapter = document.createElement('script');
+          adapter.src = 'https://webrtc.github.io/adapter/adapter-latest.js';
+          adapter.onload = () => {
+            p.load(url).then(() => {
+              return p.init(arg);
+            }).then(b => {
+              provider.onOnline(b);
+              resolve(p.getUser());
+            }, error => {
+              if(error === true) {
+                provider.onOnline(false);
+                reject('duplicated sign-in');
+              }
+              else
+                reject(error);
+            });
+          };
+          const h = document.querySelector('head');
+          h.insertBefore(adapter, h.firstChild);
         }
       });
     }
