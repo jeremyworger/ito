@@ -1,5 +1,5 @@
 {
-  "name": "ito",
+  "name": "ito-js",
   "version": "0.9.1",
   "description": "ito - browser-to-browser communication library",
   "main": "index.js",
