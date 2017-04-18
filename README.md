@@ -31,7 +31,7 @@ which you use with this library:
 
 # Functional Features
 
-ito provides web applications running on browosers and web servers running on
+ito provides web applications running on browsers and web servers running on
 Node.js with the following features:
 
 * account and authentication
