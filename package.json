@@ -1,6 +1,6 @@
 {
   "name": "ito-js",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "ito - browser-to-browser communication library",
   "main": "index.js",
   "dependencies": {

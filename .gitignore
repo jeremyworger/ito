@@ -3,7 +3,7 @@
 .vscode/
 KiiSDK.min.js
 node_modules
-work
-samples/config.json
+work/
+config.json
 external/
 localStorage/

@@ -1,17 +1,10 @@
-/*
+/**
+ * ito-kii.js
+ * 
  * Copyright 2017 KDDI Research, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * 
+ * This software is released under the MIT License.
+ * http://opensource.org/licenses/mit-license.php
  */
 
 'use strict';
@@ -413,6 +406,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
           msg.set('uid', user.getID());
           return kiiPushQueue(kiiPutObjectWithACL, msg);
         }).then(function () {
+          delete friendsRef[uid];
           provider.onRemoveFriend(uid);
         }) : Promise.resolve();
       }
@@ -846,7 +840,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
                 profileBucket: pb,
                 profile: friend
               };
-              provider.onAddFriend(uid, {
+              provider.onAddFriend(null, uid, {
                 email: friend.get('email'),
                 userName: friend.get('userName'),
                 status: friend.get('status')
@@ -899,18 +893,20 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         }, data.get('isPasscode'), data.get('options') || null);
         break;
       case 'accept':
+        key = data.get('requestKey');
         data.delete().then(function () {
           return kiiAddFriend(uid);
         }).then(function () {
           return kiiSetFriendChangedRef(uid);
         }).then(function () {
-          provider.onAccept(data.get('requestKey'), {
+          return kiiNotifyFriendAdded(key, uid);
+        }).then(function () {
+          provider.onAccept(key, {
             userName: data.get('userName'),
             uid: data.get('uid'),
             email: data.get('email')
           });
-        }).then(function () {
-          return kiiNotifyFriendAdded(uid);
+          kiiFriendAdded(key, uid);
         });
         break;
       case 'reject':
@@ -920,13 +916,16 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         break;
       case 'addfriend':
         data.delete().then(function () {
-          return kiiSetFriendChangedRef(uid);
+          return kiiSetFriendChangedRef(uid).then(function () {
+            kiiFriendAdded(data.get('requestKey'), uid);
+          });
         });
         break;
       case 'remove':
         data.delete().then(function () {
           return kiiRemoveFriend(uid);
         }).then(function () {
+          delete friendsRef[uid];
           provider.onRemoveFriend(uid);
         });
         break;
@@ -1101,15 +1100,8 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
     return kiiSetFriendRef(uid).then(function (result) {
       if (result) {
         var bucket = friendsRef[uid].profileBucket;
-        var friend = friendsRef[uid].profile;
         return user.pushSubscription().isSubscribed(bucket).then(function (params) {
           return params[2] ? Promise.resolve() : user.pushSubscription().subscribe(bucket);
-        }).then(function () {
-          provider.onAddFriend(uid, {
-            email: friend.get('email'),
-            userName: friend.get('userName'),
-            status: friend.get('status')
-          });
         });
       } else return group.refresh().then(function (g) {
         return kiiRemoveFriend(g.getCachedOwner().getID());
@@ -1117,9 +1109,18 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
     });
   }
 
-  function kiiNotifyFriendAdded(uid) {
+  function kiiFriendAdded(key, uid) {
+    var friend = friendsRef[uid].profile;
+    if (friend) provider.onAddFriend(key, uid, {
+      email: friend.get('email'),
+      userName: friend.get('userName'),
+      status: friend.get('status')
+    });
+  }
+
+  function kiiNotifyFriendAdded(key, uid) {
     if (!friendsRef[uid]) return Promise.resolve();
-    return kiiPutMessageObject(uid, { type: 'addfriend' });
+    return kiiPutMessageObject(uid, { type: 'addfriend', requestKey: key });
   }
 
   function kiiAddFriend(uid) {
@@ -1545,24 +1546,16 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
   }
 
   if (isBrowser) {
-    window.addEventListener('unload', function () {
-      var user = _getUser();
-      if (user) {
-        // I wish I cloud deprecate use of synchronous XHR...
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', 'https://api-jp.kii.com/api/apps/' + appId + '/server-code/versions/current/onOffline', false);
-        xhr.setRequestHeader('Authorization', 'Bearer ' + user.getAccessToken());
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.send(JSON.stringify({ pendingRequests: pendingRequests }));
-      }
-    });
+    window.addEventListener('unload', function () {});
 
-    window.addEventListener('online', function () {
+    var onOnlineHandler = function onOnlineHandler() {
       isOnline = !!_getUser();
       kiiRefreshAll();
       kiiSetPing();
       kiiShiftQueue();
-    });
+    };
+
+    window.addEventListener('online', onOnlineHandler);
 
     window.addEventListener('offline', function () {
       isOnline = false;
@@ -1571,7 +1564,18 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 
     if (document) {
       document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState === 'visible') kiiSetPing();
+        if (document.visibilityState === 'visible') onOnlineHandler();else if (document.visibilityState === 'hidden' || document.visibilityState === 'unloaded') {
+          kiiResetPing();
+          var user = _getUser();
+          if (user) {
+            // I wish I cloud deprecate use of synchronous XHR...
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', 'https://api-jp.kii.com/api/apps/' + appId + '/server-code/versions/current/onOffline', false);
+            xhr.setRequestHeader('Authorization', 'Bearer ' + user.getAccessToken());
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.send(JSON.stringify({ pendingRequests: pendingRequests }));
+          }
+        }
       });
     }
   }

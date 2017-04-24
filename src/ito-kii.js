@@ -387,6 +387,7 @@
           msg.set('uid', user.getID());
           return kiiPushQueue(kiiPutObjectWithACL, msg);
         }).then(() => {
+          delete friendsRef[uid];
           provider.onRemoveFriend(uid);
         })
       ) : Promise.resolve();
@@ -802,7 +803,7 @@
                 profileBucket: pb,
                 profile: friend
               };
-              provider.onAddFriend(uid, {
+              provider.onAddFriend(null, uid, {
                 email: friend.get('email'),
                 userName: friend.get('userName'),
                 status: friend.get('status')
@@ -856,18 +857,20 @@
       }, data.get('isPasscode'), data.get('options') || null);
       break;
     case 'accept':
+      key = data.get('requestKey');
       data.delete().then(() => {
         return kiiAddFriend(uid);
       }).then(() => {
         return kiiSetFriendChangedRef(uid);
       }).then(() => {
-        provider.onAccept(data.get('requestKey'), {
+        return kiiNotifyFriendAdded(key, uid);
+      }).then(() => {
+        provider.onAccept(key, {
           userName: data.get('userName'),
           uid: data.get('uid'),
           email: data.get('email')
         });
-      }).then(() => {
-        return kiiNotifyFriendAdded(uid);
+        kiiFriendAdded(key, uid);
       });
       break;
     case 'reject':
@@ -877,13 +880,16 @@
       break;
     case 'addfriend':
       data.delete().then(() => {
-        return kiiSetFriendChangedRef(uid);
+        return kiiSetFriendChangedRef(uid).then(() => {
+          kiiFriendAdded(data.get('requestKey'), uid);
+        });
       });
       break;
     case 'remove':
       data.delete().then(() => {
         return kiiRemoveFriend(uid);
       }).then(() => {
+        delete friendsRef[uid];
         provider.onRemoveFriend(uid);
       });
       break;
@@ -1070,15 +1076,8 @@
     return kiiSetFriendRef(uid).then(result => {
       if(result) {
         let bucket = friendsRef[uid].profileBucket;
-        let friend = friendsRef[uid].profile;
         return user.pushSubscription().isSubscribed(bucket).then(params => {
           return params[2] ? Promise.resolve() : user.pushSubscription().subscribe(bucket);
-        }).then(() => {
-          provider.onAddFriend(uid, {
-            email: friend.get('email'),
-            userName: friend.get('userName'),
-            status: friend.get('status')
-          });
         });
       }
       else
@@ -1088,10 +1087,20 @@
     })
   }
 
-  function kiiNotifyFriendAdded(uid) {
+  function kiiFriendAdded(key, uid) {
+    let friend = friendsRef[uid].profile;
+    if(friend)
+      provider.onAddFriend(key, uid, {
+        email: friend.get('email'),
+        userName: friend.get('userName'),
+        status: friend.get('status')
+      });
+  }
+
+  function kiiNotifyFriendAdded(key, uid) {
     if(!friendsRef[uid])
       return Promise.resolve();
-    return kiiPutMessageObject(uid, { type: 'addfriend' });
+    return kiiPutMessageObject(uid, { type: 'addfriend', requestKey: key });
   }
 
   function kiiAddFriend(uid) {
@@ -1102,7 +1111,7 @@
   function kiiRemoveFriend(uid) {
     return kiiResetFriendRef(uid).then(() => {
       friendsGroup.removeUser(KiiUser.userWithID(uid));
-    return kiiPushQueue(friendsGroup.save);
+      return kiiPushQueue(friendsGroup.save);
     });
   }
 
@@ -1539,27 +1548,16 @@
 
   if(isBrowser) {
     window.addEventListener('unload', () => {
-      let user = getUser();
-      if(user) {
-        // I wish I cloud deprecate use of synchronous XHR...
-        let xhr = new XMLHttpRequest();
-        xhr.open(
-          'POST',
-          'https://api-jp.kii.com/api/apps/' + appId + '/server-code/versions/current/onOffline',
-          false
-        );
-        xhr.setRequestHeader('Authorization', 'Bearer ' + user.getAccessToken());
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.send(JSON.stringify({pendingRequests: pendingRequests}));
-      }
     });
 
-    window.addEventListener('online', () => {
+    const onOnlineHandler = () => {
       isOnline = !!getUser();
       kiiRefreshAll();
       kiiSetPing();
       kiiShiftQueue();
-    });
+    };
+
+    window.addEventListener('online', onOnlineHandler);
 
     window.addEventListener('offline', () => {
       isOnline = false;
@@ -1569,7 +1567,23 @@
     if(document) {
       document.addEventListener('visibilitychange', () => {
         if(document.visibilityState === 'visible')
-          kiiSetPing();
+          onOnlineHandler();
+        else if(document.visibilityState === 'hidden' || document.visibilityState === 'unloaded') {
+          kiiResetPing();
+          let user = getUser();
+          if(user) {
+            // I wish I cloud deprecate use of synchronous XHR...
+            let xhr = new XMLHttpRequest();
+            xhr.open(
+              'POST',
+              'https://api-jp.kii.com/api/apps/' + appId + '/server-code/versions/current/onOffline',
+              false
+            );
+            xhr.setRequestHeader('Authorization', 'Bearer ' + user.getAccessToken());
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.send(JSON.stringify({pendingRequests: pendingRequests}));
+          }
+        }
       });
     }
   }

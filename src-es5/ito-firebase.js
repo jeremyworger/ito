@@ -1,17 +1,10 @@
-/*
+/**
+ * ito-firebase.js
+ * 
  * Copyright 2017 KDDI Research, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * 
+ * This software is released under the MIT License.
+ * http://opensource.org/licenses/mit-license.php
  */
 
 'use strict';
@@ -149,7 +142,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
             var h = document.querySelector('head');
             return new Promise(function (resolve, reject) {
               var s = document.createElement('script');
-              s.src = url || 'https://www.gstatic.com/firebasejs/3.6.4/firebase.js';
+              s.src = url || 'https://www.gstatic.com/firebasejs/3.8.0/firebase.js';
               s.addEventListener('load', function () {
                 resolve();
               });
@@ -330,7 +323,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
     }, {
       key: 'dropRequest',
       value: function dropRequest(key, passcode) {
-        _dropRequest(key, passcode);
+        return _dropRequest(key, passcode);
       }
     }, {
       key: 'acceptRequest',
@@ -711,13 +704,13 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
           _dropRequest(data.key, usePasscode).then(function () {
             return firebaseAddFriend(v.uid);
           }).then(function () {
-            firebaseSetFriendChangedRef(v.uid);
+            firebaseSetFriendChangedRef(v.requestKey, v.uid);
             provider.onAccept(v.requestKey, {
               userName: v.userName,
               uid: v.uid,
               email: v.email
             });
-            notifyFriendAdded(firebaseEscape(v.email));
+            notifyFriendAdded(v.requestKey, firebaseEscape(v.email));
           });
           break;
         case 'reject':
@@ -728,7 +721,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         case 'addfriend':
           _dropRequest(data.key, false).then(function () {
             firebase.database().ref('users/' + v.uid).once('value', function () {
-              firebaseSetFriendChangedRef(v.uid);
+              firebaseSetFriendChangedRef(v.requestKey, v.uid);
             }, function () {
               throw new Error('Unexpected internal message (addfriend)');
             });
@@ -823,7 +816,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
     }
   }
 
-  function firebaseSetFriendChangedRef(key) {
+  function firebaseSetFriendChangedRef(requestKey, key) {
     var _this6 = this;
 
     firebaseGetFriendProfile(key).then(function (friend) {
@@ -833,7 +826,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         arg[d.key] = d.val();
         provider.onUpdateFriend(key, arg);
       }.bind(_this6, key));
-      if (friend) provider.onAddFriend(key, friend);else firebase.database().ref('friends/' + user.uid + '/' + key).remove();
+      if (friend) provider.onAddFriend(requestKey, key, friend);else firebase.database().ref('friends/' + user.uid + '/' + key).remove();
     });
   }
 
@@ -844,7 +837,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
       var val = data.val();
       if (val) {
         Object.keys(val).forEach(function (uid) {
-          firebaseSetFriendChangedRef(uid);
+          firebaseSetFriendChangedRef(null, uid);
         });
       }
     });
@@ -875,12 +868,13 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
     return ref ? ref.child(key).remove() : Promise.reject(new Error('internal error (firebaseDropRequest)'));
   }
 
-  function notifyFriendAdded(m) {
+  function notifyFriendAdded(k, m) {
     var user = _getUser();
     var ref = firebase.database().ref('requests/' + firebaseEscape(m)).push();
     return ref.set({
       type: 'addfriend',
-      uid: user.uid
+      uid: user.uid,
+      requestKey: k
     });
   }
 

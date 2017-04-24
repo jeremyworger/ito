@@ -1,9 +1,9 @@
 .gitignore
 .DS_Store
 .vscode/
+KiiSDK.min.js
 node_modules
-work
-samples/config.json
-samples/localtest.html
-samples/KiiSDK.min.js
+work/
+config.json
 external/
+localStorage/

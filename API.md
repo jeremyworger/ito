@@ -164,7 +164,8 @@ to `ito.setPasscode()`, for example.
 ```js
 // When a friend is added to your friend list
 ito.on('addfriend', event => {
-  console.log('friend [' + event.uid + '] is added');
+  // Note: event.key is set to null when the event is NOT fired as a result of request/accept
+  console.log('friend [' + event.uid + '] is added (requesyKey = ' + event.key + ')';
 });
 
 // When a friend's status has been changed
@@ -279,18 +280,18 @@ navigator.mediaDevices.getUserMedia({
 ## Answerer: Wait for friend's invitation
 
 ```js
-ito.on('invite', endpoint => {
+ito.on('invite', event => {
   console.log(endpoint.peer); // the peer's uid
   if(/* accept the peer's invitation*/) {
     navigator.mediaDevices.getUserMedia({
       video: true,
       audio: true
     }).then(stream => {
-      endpoint.accept(stream);
+      event.endpoint.accept(stream);
     });
   }
   else // refuse the peer's invitation
-    endpoint.reject();
+    event.endpoint.reject();
 });
 ```
 

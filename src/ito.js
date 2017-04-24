@@ -100,7 +100,17 @@
   const useTrack = !!self.RTCRtpSender;
   const useTransceiver = !!self.RTCRtpTransceiver;
   let endpoints = {};
-  let pcOpt = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+  let pcOpt = {
+    iceServers: [{
+      urls: [
+        'stun:stun.l.google.com:19302',
+        'stun:stun1.l.google.com:19302',
+        'stun:stun2.l.google.com:19302',
+        'stun:stun3.l.google.com:19302',
+        'stun:stun4.l.google.com:19302'
+      ]
+    }]
+  };
 
   let epOpt = {};
 
@@ -152,9 +162,9 @@
       this.parent.emit(new ItoRejectEvent(key));
     }
 
-    onAddFriend(uid, friend) {
+    onAddFriend(key, uid, friend) {
       friends[uid] = friend;
-      this.parent.emit(new ItoFriendEvent('add', uid, Object.assign(friend)));
+      this.parent.emit(new ItoAddFriendEvent('add', key, uid, Object.assign(friend)));
     }
 
     onUpdateFriend(uid, friend) {
@@ -422,6 +432,13 @@
       super(type + 'friend');
       this.uid = uid;
       this.profile = profile;
+    }
+  }
+
+  class ItoAddFriendEvent extends ItoFriendEvent {
+    constructor(type, key, uid, profile) {
+      super(type, uid, profile);
+      this.key = key;
     }
   }
 
@@ -817,7 +834,7 @@
     Object.keys(endpoints).forEach(uid => {
       Object.keys(endpoints[uid]).forEach(cid => {
         let e = endpoints[uid][cid];
-        if (e.isOfferer && e.peerConnection.iceConnectionState.match(/^(disconnected|failed)$/))
+        if (e.isOfferer && e.peerConnection && e.peerConnection.iceConnectionState.match(/^(disconnected|failed)$/))
           sendReconnect(e);
       });
     });

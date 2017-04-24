@@ -1,17 +1,10 @@
-/*
+/**
+ * ito.js
+ * 
  * Copyright 2017 KDDI Research, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * 
+ * This software is released under the MIT License.
+ * http://opensource.org/licenses/mit-license.php
  */
 
 'use strict';
@@ -27,10 +20,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
 (function (self, isBrowser) {
-  if (isBrowser) {
-    self.RTCPeerConnection = self.RTCPeerConnection || self.webkitRTCPeerConnection || self.mozRTCPeerConnection;
-    self.MediaStream = self.MediaStream || self.webkitMediaStream;
-  } else {
+  if (!isBrowser) {
     // node-localstorage
     var LocalStorage = require('node-localstorage').LocalStorage;
     self.localStorage = new LocalStorage('./localStorage');
@@ -123,7 +113,11 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
   var useTrack = !!self.RTCRtpSender;
   var useTransceiver = !!self.RTCRtpTransceiver;
   var endpoints = {};
-  var pcOpt = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+  var pcOpt = {
+    iceServers: [{
+      urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302', 'stun:stun3.l.google.com:19302', 'stun:stun4.l.google.com:19302']
+    }]
+  };
 
   var epOpt = {};
 
@@ -188,9 +182,9 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
       }
     }, {
       key: 'onAddFriend',
-      value: function onAddFriend(uid, friend) {
+      value: function onAddFriend(key, uid, friend) {
         friends[uid] = friend;
-        this.parent.emit(new ItoFriendEvent('add', uid, Object.assign(friend)));
+        this.parent.emit(new ItoAddFriendEvent('add', key, uid, Object.assign(friend)));
       }
     }, {
       key: 'onUpdateFriend',
@@ -524,17 +518,32 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     return ItoFriendEvent;
   }(ItoEvent);
 
+  var ItoAddFriendEvent = function (_ItoFriendEvent) {
+    _inherits(ItoAddFriendEvent, _ItoFriendEvent);
+
+    function ItoAddFriendEvent(type, key, uid, profile) {
+      _classCallCheck(this, ItoAddFriendEvent);
+
+      var _this6 = _possibleConstructorReturn(this, (ItoAddFriendEvent.__proto__ || Object.getPrototypeOf(ItoAddFriendEvent)).call(this, type, uid, profile));
+
+      _this6.key = key;
+      return _this6;
+    }
+
+    return ItoAddFriendEvent;
+  }(ItoFriendEvent);
+
   var ItoMessageEvent = function (_ItoEvent6) {
     _inherits(ItoMessageEvent, _ItoEvent6);
 
     function ItoMessageEvent(uid, msg) {
       _classCallCheck(this, ItoMessageEvent);
 
-      var _this6 = _possibleConstructorReturn(this, (ItoMessageEvent.__proto__ || Object.getPrototypeOf(ItoMessageEvent)).call(this, 'message'));
+      var _this7 = _possibleConstructorReturn(this, (ItoMessageEvent.__proto__ || Object.getPrototypeOf(ItoMessageEvent)).call(this, 'message'));
 
-      _this6.uid = uid;
-      _this6.data = msg;
-      return _this6;
+      _this7.uid = uid;
+      _this7.data = msg;
+      return _this7;
     }
 
     return ItoMessageEvent;
@@ -546,11 +555,11 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     function ItoMessageAckEvent(uid, key) {
       _classCallCheck(this, ItoMessageAckEvent);
 
-      var _this7 = _possibleConstructorReturn(this, (ItoMessageAckEvent.__proto__ || Object.getPrototypeOf(ItoMessageAckEvent)).call(this, 'messageack'));
+      var _this8 = _possibleConstructorReturn(this, (ItoMessageAckEvent.__proto__ || Object.getPrototypeOf(ItoMessageAckEvent)).call(this, 'messageack'));
 
-      _this7.uid = uid;
-      _this7.messageKey = key;
-      return _this7;
+      _this8.uid = uid;
+      _this8.messageKey = key;
+      return _this8;
     }
 
     return ItoMessageAckEvent;
@@ -562,10 +571,10 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     function ItoInviteEvent(endpoint) {
       _classCallCheck(this, ItoInviteEvent);
 
-      var _this8 = _possibleConstructorReturn(this, (ItoInviteEvent.__proto__ || Object.getPrototypeOf(ItoInviteEvent)).call(this, 'invite'));
+      var _this9 = _possibleConstructorReturn(this, (ItoInviteEvent.__proto__ || Object.getPrototypeOf(ItoInviteEvent)).call(this, 'invite'));
 
-      _this8.endpoint = endpoint;
-      return _this8;
+      _this9.endpoint = endpoint;
+      return _this9;
     }
 
     return ItoInviteEvent;
@@ -577,10 +586,10 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     function ItoNotificationEvent(data) {
       _classCallCheck(this, ItoNotificationEvent);
 
-      var _this9 = _possibleConstructorReturn(this, (ItoNotificationEvent.__proto__ || Object.getPrototypeOf(ItoNotificationEvent)).call(this, 'notification'));
+      var _this10 = _possibleConstructorReturn(this, (ItoNotificationEvent.__proto__ || Object.getPrototypeOf(ItoNotificationEvent)).call(this, 'notification'));
 
-      _this9.data = data; // an array of notifications (timestamp, data)
-      return _this9;
+      _this10.data = data; // an array of notifications (timestamp, data)
+      return _this10;
     }
 
     return ItoNotificationEvent;
@@ -597,10 +606,10 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     function Ito() {
       _classCallCheck(this, Ito);
 
-      var _this10 = _possibleConstructorReturn(this, (Ito.__proto__ || Object.getPrototypeOf(Ito)).call(this));
+      var _this11 = _possibleConstructorReturn(this, (Ito.__proto__ || Object.getPrototypeOf(Ito)).call(this));
 
-      _this10.profile = {};
-      Object.defineProperties(_this10, {
+      _this11.profile = {};
+      Object.defineProperties(_this11, {
         state: { get: function get() {
             return state;
           } },
@@ -619,7 +628,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
           }
         }
       });
-      return _this10;
+      return _this11;
     }
 
     /*
@@ -633,17 +642,25 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
         return new Promise(function (resolve, reject) {
           if (state !== 'uninitialized') resolve();else if (!(p instanceof ItoProvider)) reject(new Error('Incorrect Provider'));else {
             provider = p;
-            p.load(url).then(function () {
-              return p.init(arg);
-            }).then(function (b) {
-              provider.onOnline(b);
-              resolve(p.getUser());
-            }, function (error) {
-              if (error === true) {
-                provider.onOnline(false);
-                reject('duplicated sign-in');
-              } else reject(error);
-            });
+
+            // load WebRTC adapter
+            var adapter = document.createElement('script');
+            adapter.src = 'https://webrtc.github.io/adapter/adapter-latest.js';
+            adapter.onload = function () {
+              p.load(url).then(function () {
+                return p.init(arg);
+              }).then(function (b) {
+                provider.onOnline(b);
+                resolve(p.getUser());
+              }, function (error) {
+                if (error === true) {
+                  provider.onOnline(false);
+                  reject('duplicated sign-in');
+                } else reject(error);
+              });
+            };
+            var h = document.querySelector('head');
+            h.insertBefore(adapter, h.firstChild);
           }
         });
       }
@@ -681,11 +698,11 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     }, {
       key: 'signOut',
       value: function signOut() {
-        var _this11 = this;
+        var _this12 = this;
 
         return !profile.uid ? Promise.resolve() : new Promise(function (resolve, reject) {
           Object.keys(profile.isAnonymous ? friends : {}).reduce(function (a, b) {
-            return a.then(provider.sendRemove.bind(_this11, b, friends[b].email));
+            return a.then(provider.sendRemove.bind(_this12, b, friends[b].email));
           }, Promise.resolve()).then(function () {
             provider.signOut().then(function () {
               resolve();
@@ -940,7 +957,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     Object.keys(endpoints).forEach(function (uid) {
       Object.keys(endpoints[uid]).forEach(function (cid) {
         var e = endpoints[uid][cid];
-        if (e.isOfferer && e.peerConnection.iceConnectionState.match(/^(disconnected|failed)$/)) sendReconnect(e);
+        if (e.isOfferer && e.peerConnection && e.peerConnection.iceConnectionState.match(/^(disconnected|failed)$/)) sendReconnect(e);
       });
     });
   }
@@ -997,10 +1014,10 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     function ItoEndpointEvent(type, endpoint) {
       _classCallCheck(this, ItoEndpointEvent);
 
-      var _this12 = _possibleConstructorReturn(this, (ItoEndpointEvent.__proto__ || Object.getPrototypeOf(ItoEndpointEvent)).call(this, type));
+      var _this13 = _possibleConstructorReturn(this, (ItoEndpointEvent.__proto__ || Object.getPrototypeOf(ItoEndpointEvent)).call(this, type));
 
-      _this12.target = endpoint;
-      return _this12;
+      _this13.target = endpoint;
+      return _this13;
     }
 
     return ItoEndpointEvent;
@@ -1012,10 +1029,10 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     function ItoEndpointStateChangeEvent(endpoint) {
       _classCallCheck(this, ItoEndpointStateChangeEvent);
 
-      var _this13 = _possibleConstructorReturn(this, (ItoEndpointStateChangeEvent.__proto__ || Object.getPrototypeOf(ItoEndpointStateChangeEvent)).call(this, 'statechange', endpoint));
+      var _this14 = _possibleConstructorReturn(this, (ItoEndpointStateChangeEvent.__proto__ || Object.getPrototypeOf(ItoEndpointStateChangeEvent)).call(this, 'statechange', endpoint));
 
-      _this13.state = endpoint.state;
-      return _this13;
+      _this14.state = endpoint.state;
+      return _this14;
     }
 
     return ItoEndpointStateChangeEvent;
@@ -1027,10 +1044,10 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     function ItoEndpointRejectEvent(endpoint, reason) {
       _classCallCheck(this, ItoEndpointRejectEvent);
 
-      var _this14 = _possibleConstructorReturn(this, (ItoEndpointRejectEvent.__proto__ || Object.getPrototypeOf(ItoEndpointRejectEvent)).call(this, 'reject', endpoint));
+      var _this15 = _possibleConstructorReturn(this, (ItoEndpointRejectEvent.__proto__ || Object.getPrototypeOf(ItoEndpointRejectEvent)).call(this, 'reject', endpoint));
 
-      _this14.reason = reason;
-      return _this14;
+      _this15.reason = reason;
+      return _this15;
     }
 
     return ItoEndpointRejectEvent;
@@ -1042,10 +1059,10 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     function ItoEndpointAddStreamEvent(endpoint, stream) {
       _classCallCheck(this, ItoEndpointAddStreamEvent);
 
-      var _this15 = _possibleConstructorReturn(this, (ItoEndpointAddStreamEvent.__proto__ || Object.getPrototypeOf(ItoEndpointAddStreamEvent)).call(this, 'addstream', endpoint));
+      var _this16 = _possibleConstructorReturn(this, (ItoEndpointAddStreamEvent.__proto__ || Object.getPrototypeOf(ItoEndpointAddStreamEvent)).call(this, 'addstream', endpoint));
 
-      _this15.stream = stream;
-      return _this15;
+      _this16.stream = stream;
+      return _this16;
     }
 
     return ItoEndpointAddStreamEvent;
@@ -1057,10 +1074,10 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     function ItoEndpointRemoveStreamEvent(endpoint, stream) {
       _classCallCheck(this, ItoEndpointRemoveStreamEvent);
 
-      var _this16 = _possibleConstructorReturn(this, (ItoEndpointRemoveStreamEvent.__proto__ || Object.getPrototypeOf(ItoEndpointRemoveStreamEvent)).call(this, 'removestream', endpoint));
+      var _this17 = _possibleConstructorReturn(this, (ItoEndpointRemoveStreamEvent.__proto__ || Object.getPrototypeOf(ItoEndpointRemoveStreamEvent)).call(this, 'removestream', endpoint));
 
-      _this16.stream = stream;
-      return _this16;
+      _this17.stream = stream;
+      return _this17;
     }
 
     return ItoEndpointRemoveStreamEvent;
@@ -1072,10 +1089,10 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     function ItoEndpointMessageEvent(endpoint, data) {
       _classCallCheck(this, ItoEndpointMessageEvent);
 
-      var _this17 = _possibleConstructorReturn(this, (ItoEndpointMessageEvent.__proto__ || Object.getPrototypeOf(ItoEndpointMessageEvent)).call(this, 'message', endpoint));
+      var _this18 = _possibleConstructorReturn(this, (ItoEndpointMessageEvent.__proto__ || Object.getPrototypeOf(ItoEndpointMessageEvent)).call(this, 'message', endpoint));
 
-      _this17.data = data;
-      return _this17;
+      _this18.data = data;
+      return _this18;
     }
 
     return ItoEndpointMessageEvent;
@@ -1087,16 +1104,16 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     function ItoEndpoint(uid, cid, isOfferer, data) {
       _classCallCheck(this, ItoEndpoint);
 
-      var _this18 = _possibleConstructorReturn(this, (ItoEndpoint.__proto__ || Object.getPrototypeOf(ItoEndpoint)).call(this));
+      var _this19 = _possibleConstructorReturn(this, (ItoEndpoint.__proto__ || Object.getPrototypeOf(ItoEndpoint)).call(this));
 
-      _this18.peer = uid;
-      _this18.connection = cid;
-      _this18.state = isOfferer ? 'inviting' : 'invited';
-      _this18.isOfferer = isOfferer;
-      _this18.peerConnection = null;
-      _this18.dataChannel = null;
-      _this18.inputStream = null;
-      _this18.receivedStream = null;
+      _this19.peer = uid;
+      _this19.connection = cid;
+      _this19.state = isOfferer ? 'inviting' : 'invited';
+      _this19.isOfferer = isOfferer;
+      _this19.peerConnection = null;
+      _this19.dataChannel = null;
+      _this19.inputStream = null;
+      _this19.receivedStream = null;
       if (!epOpt[uid]) epOpt[uid] = {};
       epOpt[uid][cid] = {
         receiveAudioTrack: false,
@@ -1104,7 +1121,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
         useDataChannel: !!data,
         buffer: []
       };
-      return _this18;
+      return _this19;
     }
 
     _createClass(ItoEndpoint, [{
@@ -1158,35 +1175,35 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     }, {
       key: 'accept',
       value: function accept(stream, opt) {
-        var _this19 = this;
+        var _this20 = this;
 
         return new Promise(function (resolve, reject) {
-          if (_this19.isOfferer) reject(new Error('not answerer'));else if (_this19.state !== 'invited') reject(new Error('state is not \'invited\''));else if (MediaStream && stream && !(stream instanceof MediaStream)) reject(new Error('the first parameter (\'stream\') is invalid)'));else {
-            var uid = _this19.peer;
-            var cid = _this19.connection;
+          if (_this20.isOfferer) reject(new Error('not answerer'));else if (_this20.state !== 'invited') reject(new Error('state is not \'invited\''));else if (MediaStream && stream && !(stream instanceof MediaStream)) reject(new Error('the first parameter (\'stream\') is invalid)'));else {
+            var uid = _this20.peer;
+            var cid = _this20.connection;
             var options = {
               audio: !!stream && stream.getAudioTracks().length > 0,
               video: !!stream && stream.getVideoTracks().length > 0
             };
-            _this19.inputStream = stream;
+            _this20.inputStream = stream;
             provider.sendAccept(uid, cid, options).then(function () {
               resolve();
               onEndpointStateChange(uid, cid, 'connecting');
-              createPeerConnection(_this19);
-            }.bind(_this19));
+              createPeerConnection(_this20);
+            }.bind(_this20));
           }
         });
       }
     }, {
       key: 'reject',
       value: function reject() {
-        var _this20 = this;
+        var _this21 = this;
 
         return new Promise(function (resolve, reject) {
-          if (_this20.isOfferer) reject(new Error('not answerer'));else if (_this20.state !== 'invited') reject(new Error('state is not \'invited\''));else {
-            provider.sendReject(_this20.peer, _this20.connection, 'rejected').then(function () {
+          if (_this21.isOfferer) reject(new Error('not answerer'));else if (_this21.state !== 'invited') reject(new Error('state is not \'invited\''));else {
+            provider.sendReject(_this21.peer, _this21.connection, 'rejected').then(function () {
               resolve();
-              provider.onClose({ uid: _this20.peer, cid: _this20.connection });
+              provider.onClose({ uid: _this21.peer, cid: _this21.connection });
             });
           }
         });
@@ -1214,12 +1231,12 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     }, {
       key: 'close',
       value: function close() {
-        var _this21 = this;
+        var _this22 = this;
 
         return new Promise(function (resolve, reject) {
-          provider.sendClose(_this21.peer, _this21.connection).then(function () {
+          provider.sendClose(_this22.peer, _this22.connection).then(function () {
             resolve();
-            provider.onClose({ uid: _this21.peer, cid: _this21.connection });
+            provider.onClose({ uid: _this22.peer, cid: _this22.connection });
           });
         });
       }
@@ -1250,23 +1267,23 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     }, {
       key: 'get',
       value: function get(key) {
-        var _this22 = this;
+        var _this23 = this;
 
         if (!this.scope) return Promise.reject(new Error('the data store is already reset.'));
         return provider.getDataElement(this.name, key).then(function (result) {
-          return new ItoDataElement(_this22, result.key, result.data);
+          return new ItoDataElement(_this23, result.key, result.data);
         });
       }
     }, {
       key: 'getAll',
       value: function getAll() {
-        var _this23 = this;
+        var _this24 = this;
 
         if (!this.scope) return Promise.reject(new Error('the data store is already reset.'));
         return provider.getAllDataElements(this.name).then(function (result) {
           var r = result || [];
           return Object.keys(r).reduce(function (a, b) {
-            a.push(new ItoDataElement(_this23, b, r[b]));
+            a.push(new ItoDataElement(_this24, b, r[b]));
             return a;
           }, []);
         });
@@ -1286,11 +1303,11 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     }, {
       key: 'reset',
       value: function reset() {
-        var _this24 = this;
+        var _this25 = this;
 
         if (!this.scope) return Promise.reject(new Error('the data store is already reset.'));
         return provider.removeDataStore(this.name).then(function () {
-          delete scopes[_this24.name];
+          delete scopes[_this25.name];
         });
       }
     }, {
@@ -1322,11 +1339,11 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     function ItoDataObserver(uid, dataStore) {
       _classCallCheck(this, ItoDataObserver);
 
-      var _this25 = _possibleConstructorReturn(this, (ItoDataObserver.__proto__ || Object.getPrototypeOf(ItoDataObserver)).call(this));
+      var _this26 = _possibleConstructorReturn(this, (ItoDataObserver.__proto__ || Object.getPrototypeOf(ItoDataObserver)).call(this));
 
-      _this25.uid = uid;
-      _this25.dataStore = dataStore;
-      return _this25;
+      _this26.uid = uid;
+      _this26.dataStore = dataStore;
+      return _this26;
     }
 
     _createClass(ItoDataObserver, [{
@@ -1347,11 +1364,11 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     function ItoDataObserverEvent(type, observer) {
       _classCallCheck(this, ItoDataObserverEvent);
 
-      var _this26 = _possibleConstructorReturn(this, (ItoDataObserverEvent.__proto__ || Object.getPrototypeOf(ItoDataObserverEvent)).call(this));
+      var _this27 = _possibleConstructorReturn(this, (ItoDataObserverEvent.__proto__ || Object.getPrototypeOf(ItoDataObserverEvent)).call(this));
 
-      _this26.type = type;
-      _this26.target = observer;
-      return _this26;
+      _this27.type = type;
+      _this27.target = observer;
+      return _this27;
     }
 
     return ItoDataObserverEvent;
@@ -1363,11 +1380,11 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     function ItoDataObserverElementEvent(observer, type, key, data) {
       _classCallCheck(this, ItoDataObserverElementEvent);
 
-      var _this27 = _possibleConstructorReturn(this, (ItoDataObserverElementEvent.__proto__ || Object.getPrototypeOf(ItoDataObserverElementEvent)).call(this, 'element' + type, observer));
+      var _this28 = _possibleConstructorReturn(this, (ItoDataObserverElementEvent.__proto__ || Object.getPrototypeOf(ItoDataObserverElementEvent)).call(this, 'element' + type, observer));
 
-      _this27.key = key;
-      _this27.data = data;
-      return _this27;
+      _this28.key = key;
+      _this28.data = data;
+      return _this28;
     }
 
     return ItoDataObserverElementEvent;

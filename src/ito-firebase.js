@@ -126,7 +126,7 @@
           let h = document.querySelector('head');
           return new Promise((resolve, reject) => {
             let s = document.createElement('script');
-            s.src = url || 'https://www.gstatic.com/firebasejs/3.6.4/firebase.js';
+            s.src = url || 'https://www.gstatic.com/firebasejs/3.8.0/firebase.js';
             s.addEventListener('load', () => { resolve(); });
             s.addEventListener('error', () => {
               reject(new Error('cannot load Firebase SDK'));
@@ -679,13 +679,13 @@
         dropRequest(data.key, usePasscode).then(() => {
           return firebaseAddFriend(v.uid);
         }).then(() => {
-          firebaseSetFriendChangedRef(v.uid);
+          firebaseSetFriendChangedRef(v.requestKey, v.uid);
           provider.onAccept(v.requestKey, {
             userName: v.userName,
             uid: v.uid,
             email: v.email
           });
-          notifyFriendAdded(firebaseEscape(v.email));
+          notifyFriendAdded(v.requestKey, firebaseEscape(v.email));
         });
         break;
       case 'reject':
@@ -696,7 +696,7 @@
       case 'addfriend':
         dropRequest(data.key, false).then(() => {
           firebase.database().ref('users/' + v.uid).once('value', () => {
-            firebaseSetFriendChangedRef(v.uid);
+            firebaseSetFriendChangedRef(v.requestKey, v.uid);
           }, () => {
             throw new Error('Unexpected internal message (addfriend)');
           });
@@ -796,7 +796,7 @@
     }
   }
 
-  function firebaseSetFriendChangedRef(key) {
+  function firebaseSetFriendChangedRef(requestKey, key) {
     firebaseGetFriendProfile(key).then(friend => {
       profilesRef[key] = firebase.database().ref('users/' + key);
       profilesRef[key].on('child_changed', ((k, d) => {
@@ -805,7 +805,7 @@
         provider.onUpdateFriend(key, arg);
       }).bind(this, key));
       if(friend)
-        provider.onAddFriend(key, friend);
+        provider.onAddFriend(requestKey, key, friend);
       else
         firebase.database().ref('friends/' + user.uid + '/' + key).remove();
     })
@@ -818,7 +818,7 @@
       let val = data.val();
       if(val) {
         Object.keys(val).forEach(uid => {
-          firebaseSetFriendChangedRef(uid);
+          firebaseSetFriendChangedRef(null, uid);
         });
       }
     });
@@ -849,12 +849,13 @@
     return ref ? ref.child(key).remove() : Promise.reject(new Error('internal error (firebaseDropRequest)'));
   }
 
-  function notifyFriendAdded(m) {
+  function notifyFriendAdded(k, m) {
     let user = getUser();
     let ref = firebase.database().ref('requests/' + firebaseEscape(m)).push();
     return ref.set({
       type: 'addfriend',
-      uid: user.uid
+      uid: user.uid,
+      requestKey: k
     });
   }
 
