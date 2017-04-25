@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ito - how-to</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.10.0/styles/qtcreator_dark.min.css" rel="stylesheet">
+    <link href="style/ito.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.10.0/highlight.min.js"></script>
+    <script>hljs.initHighlightingOnLoad();</script>
+  </head>
+  <body ontouchstart=""> <!-- a hack for *:active in iOS -->
+    <nav>
+      <input id="showmenu" type="checkbox"><label for="showmenu"></label>
+      <ul>
+        <li id="top"><a href="./">ito</a></li>
+        <li><a href="./howto.html">how-to</a></li>
+        <li><a href="./samples.html">samples</a></li>
+        <li id="repo"><a href="https://github.com/tomoyukilabs/">GitHub</a></li>
+      </ul>
+    </nav>
+    <header>
+      <h1><strong>ito</strong> - how-to</h1>
+    </header>
+    <section>
+      <h2>Before starting</h2>
+      <section>
+        <h3 id="agreement">License agreement</h3>
+        <details>
+          <summary><strong>ito</strong> is released under the MIT License.</summary>
+
+          <p>Copyright 2017 KDDI Research, Inc.</p>
+          <p>
+            Permission is hereby granted, free of charge, to any person obtaining a copy
+            of this software and associated documentation files (the "Software"), to deal
+            in the Software without restriction, including without limitation the rights
+            to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+            copies of the Software, and to permit persons to whom the Software is
+            furnished to do so, subject to the following conditions:
+          </p>
+          <p>
+            The above copyright notice and this permission notice shall be included in all
+            copies or substantial portions of the Software.
+          </p>
+          <p>
+            THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+            IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+            FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+            AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+            LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+            OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+            SOFTWARE.
+          </p>
+        </details>
+      </section>
+      <section>
+        <h3>Backend services</h3>
+        <p>To run <strong>ito</strong> on your enviromnemt, developer account for one of the following backend services is required:
+          <ul>
+            <li><a href="https://firebase.google.com">Firebase</a></li>
+            <li><a href="https://www.kii.com">Kii Cloud</a></li>
+          </ul>
+        </p>
+        <p>Also, you MUST follow Terms of Service for any backend service which you use:
+          <ul>
+            <li><a href="https://firebase.google.com/terms/">Terms of Service for Firebase Services</a></li>
+            <li><a href="https://en.kii.com/terms/">Terms of Use | Kii</a></li>
+          </ul>
+        </p>
+      </section>
+    </section>
+    <section>
+      <h2>Install <strong>ito</strong> in your environment</h2>
+      <section>
+        <h3>Case 1: Clone <strong>ito</strong> from GitHub</h3>
+        <pre><code class="bash">git clone https://github.com/tomoyukilabs/ito.git</code></pre>
+        <p>If you wish to run <strong>ito</strong> on Node.js, please install dependent libraries:</p>
+        <pre><code class="bash">npm install --save</code></pre>
+      </section>
+      <section>
+        <h3>Case 2: Import <strong>ito</strong> from npm</h3>
+        <pre><code class="bash">npm install --save ito-js</code></pre>
+      </section>
+    </section>
+    <section>
+      <h2>Setup before using <strong>ito</strong></h2>
+      <section>
+        <h3>Firebase</h3>
+        <div>
+          <ol>
+            <li>Create your Firebase project at <a href="https://console.firebase.google.com">Firebase Console</a>.</li>
+            <li>Configure <em>Authentication -> Sign-in method</em> (if needed).
+              <ul>
+                <li>Select <em>Sign-in providers</em> as you need.</li>
+                <li>For Facebook, <em>App ID</em>, <em>App secret</em> and <em>OAuth redirect URI</em> must be configured as well.</li>
+                <li>Add your domain to <em>OAuth redirect domains</em>.</li>
+                <li>Note: GitHub and Twitter are not supported yet.</li>
+              </ul>
+            </li>
+            <li>Copy and paste <code>etc/firebase-rules.json</code> into <em>Database -> Rules</em>.</li>
+            <li>
+              Confirm the snippet from <em>Authentication -> Web setup</em>, and note down
+              the values of <code>apiKey</code>, <code>authDomain</code> and <code>databaseURL</code>.
+              These values are used in <code>ito.init()</code>.
+            </li>
+          </ol>
+        </div>
+      </section>
+      <section>
+        <h3>Kii Cloud</h3>
+        <p>Note: <em>Node.js is required to initialize a Kii Cloud application.</em></p>
+        <div>
+          <ol>
+            <li>Create your app at <a href="https://developer.kii.com">Kii Developer Portal</a>.
+              <ul>
+                <li>Choose HTML5 as your application's platform.</li>
+                <li>Choose a server location appropriate for you.</li>
+                <li>For detailed information, please refer to <a href="http://docs.kii.com/en/guides/cloudsdk/javascript/quickstart/create-app/">http://docs.kii.com/en/guides/cloudsdk/javascript/quickstart/create-app/</a>.</li>
+              </ul>
+            </li>
+            <li>Configure social network settings (if needed).
+              <ul>
+                <li>For detailed information, please refer to <a href="http://docs.kii.com/en/guides/cloudsdk/javascript/managing-users/social-network-integration/">http://docs.kii.com/en/guides/cloudsdk/javascript/managing-users/social-network-integration/</a>.</li>
+              </ul>
+            </li>
+            <li>Confirm your APP ID, APP KEY, CLIENT ID and CLIENT SECRET.
+              <ul>
+                <li>These values are required to initialize your Kii Cloud application (see 4.) and deploy Server Code (see 5.).</li>
+                <li>The values of APP ID and APP KEY are used in <code>ito.init()</code>.</li>
+                <li>For detailed information, please refer to <a href="http://docs.kii.com/en/guides/cloudsdk/javascript/quickstart/create-app/#checking-appid-and-appkey">http://docs.kii.com/en/guides/cloudsdk/javascript/quickstart/create-app/#checking-appid-and-appkey</a>.</li>
+              </ul>
+            </li>
+            <li>Run the script <code>etc/kii-init.js</code> by Node.js on your shell (Terminal, etc.), as follows:
+            <pre><code class="bash">$ node etc/kii-init.js \
+  --site [us|eu|cn3|sg|jp] \
+  --app-id &lt;your_app_id&gt; \
+  --app-key &lt;your_app_key&gt; \
+  --client-id &lt;your_client_id&gt; \
+  --client-secret &lt;your_client_secret&gt;</code></pre>
+            </li>
+            <li>
+              Deploy <code>etc/kii-server-code.js</code> as Server Code with <code>etc/kii-server-hook.json</code> as Server hook Configuration File,
+              by using <a href="http://docs.kii.com/en/guides/commandlinetools/">Command Line Tools</a>. For example:
+              <pre><code class="bash">$ node kii-cli/bin/kii-servercode.js deploy-file \
+  --file etc/kii-server-code.js \
+  --site [us|eu|cn3|sg|jp] \
+  --app-id &lt;your_app_id&gt; \
+  --app-key &lt;your_app_key&gt; \
+  --client-id &lt;your_client_id&gt; \
+  --client-secret &lt;your_client_secret&gt; \
+  --hook-config etc/kii-server-hook.json</code></pre>
+            </li>
+          </ol>
+        </div>
+      </section>
+    </section>
+    <section>
+      <h2>Load <strong>ito</strong> in your web app</h2>
+      <section>
+        <h3>Browsers + Firebase</h3>
+        <pre><code class="html">&lt;script src="src/ito.js"&gt;&lt;/script&gt;
+&lt;script src="src/ito-firebase.js"&gt;&lt;/script&gt;</code></pre>
+      </section>
+      <section>
+        <h3>Browsers + Kii Cloud</h3>
+        <pre><code class="html">&lt;script src="src/ito.js"&gt;&lt;/script&gt;
+&lt;script src="src/ito-kii.js"&gt;&lt;/script&gt;</code></pre>
+      </section>
+      <section>
+        <h3>Node.js</h3>
+        <pre><code class="js">let ito = require('ito');</code></pre>
+      </section>
+      <p>For further information about API, please refer to <a href="https://github.com/tomoyukilabs/">API.md on GitHub Repository</a>.</p>
+    </section>
+    <footer>
+      <address>Copyright © 2017 <a href="https://www.kddi-research.jp/english/">KDDI Research, Inc.</a></address>
+    </footer>
+  </body>
+</html>

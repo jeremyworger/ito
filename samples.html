@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ito - samples</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.10.0/styles/qtcreator_dark.min.css" rel="stylesheet">
+    <link href="style/ito.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.10.0/highlight.min.js"></script>
+    <script>hljs.initHighlightingOnLoad();</script>
+  </head>
+  <body ontouchstart=""> <!-- a hack for *:active in iOS -->
+    <nav>
+      <input id="showmenu" type="checkbox"><label for="showmenu"></label>
+      <ul>
+        <li id="top"><a href="./">ito</a></li>
+        <li><a href="./howto.html">how-to</a></li>
+        <li><a href="./samples.html">samples</a></li>
+        <li id="repo"><a href="https://github.com/tomoyukilabs/">GitHub</a></li>
+      </ul>
+    </nav>
+    <header>
+      <h1><strong>ito</strong> - samples</h1>
+    </header>
+    <section>
+      <h2>Download sample codes</h2>
+      <ul>
+        <li><a href="samples/remotecamera/remotecamera.zip">Simple remote camera</a></li>
+        <li><a href="samples/chirimen-led/chirimen-led.zip">LED blinking with CHIRIMEN</a></li>
+      </ul>
+    </section>
+    <section>
+      <h2>Instructions</h2>
+      <div>
+        <ol>
+          <li>Download any of ZIP archive files from above and unpack it. These ZIP files include <strong>ito</strong> library itself.</li>
+          <li>
+            Create a new <code>config.json</code> file according to your environment.
+            Two templates, <code>config-template-firebase.json</code> and <code>config-template-kii.json</code>, are available in the same directory.
+            <ul>
+              <li>
+                If you wish to use <strong>ito</strong> with Kii Cloud,
+                please download Kii Cloud SDK for HTML5 from <a href="https://developer.kii.com/v2/downloads">Kii Developer Portal</a>
+                and copy <code>KiiSDK.min.js</code> under the same directory.
+              </li>
+            </ul>
+          </li>
+          <li>Upload or deploy the sample app to your web server.</li>
+          <li>
+            Run <code>device.html</code> on your IoT device,
+            e.g. any smartphone with camera (for the "Simple remote camera" sample app),
+            a CHIRIMEN board (for the "LED blinking with CHIRIMEN" sample app).
+            <ul>
+              <li>
+                In case of CHIRIMEN, please load the web app on the Browser app.
+                If you wish to launch the web app via WebIDE console, please type codes like the following:
+                <pre><code class="javascript">new MozActivity({ name: 'view', data: { type: 'url', url: '(URL of the web app)'}});</code></pre>
+              </li>
+            </ul>
+          </li>
+          <li>
+            Run <code>index.html</code> on your smartphone or tablet.
+            Note: The "Simple remote camera" sample app requires WebRTC compatibility at both IoT device and web browser.
+          </li>
+        </ol>
+      </div>
+    </section>
+    <section>
+      <h2>Simple remote camera</h2>
+      <div>
+        <ol>
+          <li>
+            When an IoT device launches a web app for devices (i.e. <code>device.html</code>),
+            its screen will show a QR code representing a controller URL.
+          </li>
+          <li>
+            When you open the URL read from the QR code by your smartphone, your browser will launch the controller web app (i.e. <code>index.html</code>),
+            the device and the smartphone's web app will automatically establish pairing between them.
+          </li>
+          <li>
+            As soon as they are paired, the device will start transmitting a video stream captured from its camera,
+            which will be displayed on the web app running on the smartphone.
+          </li>
+          <li>
+            When you click or tap a "revoke" button, the pairing will be discarded.
+          </li>
+        </ol>
+      </div>
+    </section>
+    <section>
+      <h2>LED blinking with CHIRIMEN</h2>
+      <div>
+        <ol>
+          <li>
+            When a CHIRIMEN board launches a web app for devices (i.e. <code>device.html</code>),
+            it will start waiting for pairing request with a passcode.
+            <ul>
+              <li>The default value of the passcode is <code>chirimen</code>, which is defined as <var>passcode</var> in <code>device.js</code>.</li>
+            </ul>
+          </li>
+          <li>
+            When you open a web app for smartphones (i.e. <code>index.html</code>) and input CHIRIMEN's passcode on the web app,
+            pairing between the board and the smartphone will be established, and the web app will show controller UIs.
+          </li>
+          <li>
+            After the pairing establishment, a LED light on the CHIRIMEN board will be turned on/off or blink when you click (tap) controller UIs on the web app.
+          </li>
+          <li>
+            When you click or tap a "revoke" button, the pairing will be discarded.
+          </li>
+        </ol>
+      </div>
+      <section>
+        <h3>Resources for development</h3>
+        <p>
+          For further information about web app implementation and hardware prototyping using <a href="https://chirimen.org/">CHIRIMEN</a>,
+          please refer to <a href="https://github.com/chirimen-oh/">CHIRIMEN repositories on GitHub</a>.
+          <div>
+            <ul>
+              <li><a href="https://github.com/chirimen-oh/chirimen-oh.github.io/wiki/parts(en)">Configurations of electronic and electro-mechanical parts on a CHIRIMEN board</a></li>
+              <li><a href="https://github.com/chirimen-oh/WebGPIO">WebGPIO polyfill for CHIRIMEN</a></li>
+            </ul>
+          </div>
+        </p>
+      </section>
+    </section>
+    <footer>
+      <address>Copyright © 2017 <a href="https://www.kddi-research.jp/english/">KDDI Research, Inc.</a></address>
+    </footer>
+  </body>
+</html>
