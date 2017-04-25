@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LED blinking with CHIRIMEN - ito sample app</title>
+    <link href="app.css" rel="stylesheet">
+    <script src="ito.js"></script>
+    <script src="app.js"></script>
+  </head>
+  <body>
+    <fieldset id="controller" disabled>
+      <p>
+        <button id="turnon">turn on LED</button>
+        <button id="turnoff">turn off LED</button>
+        <button id="turnblink">let LED blink</button>
+      </p>
+      <p><button id="revoke">revoke the device</button></p>
+    </fieldset>
+    <fieldset id="pairing" disabled>
+      <p>
+        <label for="passcode">passcode</label> <input type="text" pattern="^[a-zA-Z0-9]+$" id="passcode">
+        <button id="connect" disabled>connect</button>
+      </p>
+    </fieldset>
+  </body>
+</html>

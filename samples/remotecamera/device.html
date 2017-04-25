@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Simple remote camera - ito sample app</title>
+    <link href="device.css" rel="stylesheet">
+    <!--
+        //---------------------------------------------------------------------
+        // QRCode for JavaScript
+        //
+        // Copyright (c) 2009 Kazuhiko Arase
+        //
+        // URL: http://www.d-project.com/
+        //
+        // Licensed under the MIT license:
+        //   http://www.opensource.org/licenses/mit-license.php
+        //
+        // The word "QR Code" is registered trademark of 
+        // DENSO WAVE INCORPORATED
+        //   http://www.denso-wave.com/qrcode/faqpatent-e.html
+        //
+        //---------------------------------------------------------------------
+      -->
+    <script src="qrcode.min.js"></script>
+    <script src="ito.js"></script>
+    <script src="device.js"></script>
+  </head>
+  <body>
+    <div id="preview">
+      <video id="video" autoplay></video>
+    </div>
+    <div id="qrcode">
+      <div id="code"></div>
+    </div>
+  </body>
+</html>

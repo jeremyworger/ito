@@ -1,0 +1,62 @@
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  position: relative;
+  overflow: hidden;
+}
+
+#preview,
+#video,
+#qrcode {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  left: 0;
+  top: 0;
+}
+
+#preview,
+#video {
+  background: #000;
+}
+
+#qrcode {
+  background: #fff;
+  z-index: 3;
+  transition: transform 0.5s ease-in-out;
+}
+
+#preview {
+  z-index: 1;
+}
+
+#video {
+  object-fit: contain;
+}
+
+#code {
+  position: absolute;
+  width: 80%;
+  height: 80%;
+  margin: auto;
+  padding: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: 50% 50%;
+  z-index: 2;
+}
+
+#qrcode.hidden {
+  transform: translateY(100%);
+}

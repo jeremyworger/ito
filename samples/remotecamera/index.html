@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Simple remote camera - ito sample app</title>
+    <link href="app.css" rel="stylesheet">
+    <script src="ito.js"></script>
+    <script src="app.js"></script>
+  </head>
+  <body>
+    <div id="notice">
+      To connect to the camera again,<br>please scan the QR code.
+    </div>
+    <div id="screen">
+      <video id="video" autoplay></video>
+      <button id="revoke">revoke</button>
+      <button id="toggle">stop</button>
+    </div>
+    <div id="wait">
+      <div>connecting...</div>
+    </div>
+  </body>
+</html>

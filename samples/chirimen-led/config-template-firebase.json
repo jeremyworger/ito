@@ -1,0 +1,8 @@
+{
+  "provider": "firebase",
+  "settings": {
+    "apiKey": "your Firebase apiKey",
+    "authDomain": "your-firebase-authdomain.firebaseapp.com",
+    "databaseURL": "https://your-firebase-databaseurl.firebaseio.com"
+  }
+}
