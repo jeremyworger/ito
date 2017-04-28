@@ -125,8 +125,13 @@ nav input, nav input + label {
 header, footer {
   padding: 0;
   background: #bdf;
-  background-image: repeating-linear-gradient(45deg, rgba(187, 221, 255, 0), rgba(187, 221, 255, 0) 0.5rem, #bef 0.55rem, rgba(187, 221, 255, 0) 0.6rem, rgba(187, 221, 255, 0) 1rem),
-    repeating-linear-gradient(-45deg, rgba(187, 221, 255, 0), rgba(187, 221, 255, 0) 0.5rem, #adf 0.55rem, rgba(187, 221, 255, 0) 0.6rem, rgba(187, 221, 255, 0) 1rem);
+  background-size: 2rem 2rem;
+  background-repeat: repeat;
+  background-image: 
+    repeating-linear-gradient(45deg, rgba(187, 221, 255, 0), rgba(187, 221, 255, 0) 0.636396103067893rem, #bef 0.707106781186548rem, rgba(187, 221, 255, 0) 0.777817459305202rem, rgba(187, 221, 255, 0) 1.414213562373095rem),
+    repeating-linear-gradient(-45deg, rgba(187, 221, 255, 0), rgba(187, 221, 255, 0) 0.636396103067893rem, #9df 0.707106781186548rem, rgba(187, 221, 255, 0) 0.777817459305202rem, rgba(187, 221, 255, 0) 1.414213562373095rem),
+    repeating-linear-gradient(0deg, rgba(187, 221, 255, 0), rgba(187, 221, 255, 0) 0.1rem, #9cf 0.85rem, #9cf 1.15rem, rgba(187, 221, 255, 0) 1.9rem, rgba(187, 221, 255, 0) 2rem),
+    repeating-linear-gradient(90deg, rgba(187, 221, 255, 0), rgba(187, 221, 255, 0) 0.1rem, #acf 0.85rem, #acf 1.15rem, rgba(187, 221, 255, 0) 1.9rem, rgba(187, 221, 255, 0) 2rem);
 }
 
 h1, h2, h3 {
