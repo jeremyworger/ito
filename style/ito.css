@@ -124,14 +124,16 @@ nav input, nav input + label {
 
 header, footer {
   padding: 0;
-  background: #bdf;
+  background: #9df;
   background-size: 2rem 2rem;
   background-repeat: repeat;
-  background-image: 
-    repeating-linear-gradient(45deg, rgba(187, 221, 255, 0), rgba(187, 221, 255, 0) 0.636396103067893rem, #bef 0.707106781186548rem, rgba(187, 221, 255, 0) 0.777817459305202rem, rgba(187, 221, 255, 0) 1.414213562373095rem),
-    repeating-linear-gradient(-45deg, rgba(187, 221, 255, 0), rgba(187, 221, 255, 0) 0.636396103067893rem, #9df 0.707106781186548rem, rgba(187, 221, 255, 0) 0.777817459305202rem, rgba(187, 221, 255, 0) 1.414213562373095rem),
-    repeating-linear-gradient(0deg, rgba(187, 221, 255, 0), rgba(187, 221, 255, 0) 0.1rem, #9cf 0.85rem, #9cf 1.15rem, rgba(187, 221, 255, 0) 1.9rem, rgba(187, 221, 255, 0) 2rem),
-    repeating-linear-gradient(90deg, rgba(187, 221, 255, 0), rgba(187, 221, 255, 0) 0.1rem, #acf 0.85rem, #acf 1.15rem, rgba(187, 221, 255, 0) 1.9rem, rgba(187, 221, 255, 0) 2rem);
+  background-image:
+    repeating-linear-gradient(45deg, rgba(153, 221, 255, 0), rgba(153, 221, 255, 0) 0.070710678118655rem, rgba(187, 238, 255, 0.5) 0.14142135623731rem, rgba(187, 238, 255, 0.5) 0.565685424949238rem, rgba(153, 221, 255, 0) 0.636396103067893rem, rgba(153, 221, 255, 0) 1.414213562373095rem),
+    repeating-linear-gradient(-45deg, rgba(153, 221, 255, 0), rgba(153, 221, 255, 0) 0.070710678118655rem, rgba(187, 195, 255, 0.5) 0.14142135623731rem, rgba(187, 195, 255, 0.5) 0.565685424949238rem, rgba(153, 221, 255, 0) 0.636396103067893rem, rgba(153, 221, 255, 0) 1.414213562373095rem),
+    repeating-linear-gradient(45deg, rgba(153, 221, 255, 0), rgba(153, 221, 255, 0) 0.777817459305202rem, #bef 0.848528137423857rem, #bef 1.272792206135786rem, rgba(153, 221, 255, 0) 1.34350288425444rem, rgba(153, 221, 255, 0) 1.414213562373095rem),
+    repeating-linear-gradient(-45deg, rgba(153, 221, 255, 0), rgba(153, 221, 255, 0) 0.777817459305202rem, #bdf 0.848528137423857rem, #bdf 1.272792206135786rem, rgba(153, 221, 255, 0) 1.34350288425444rem, rgba(153, 221, 255, 0) 1.414213562373095rem)
+/*    repeating-linear-gradient(0deg, rgba(187, 221, 255, 0), rgba(187, 221, 255, 0) 0.1rem, #9cf 0.85rem, #9cf 1.15rem, rgba(187, 221, 255, 0) 1.9rem, rgba(187, 221, 255, 0) 2rem),
+    repeating-linear-gradient(90deg, rgba(187, 221, 255, 0), rgba(187, 221, 255, 0) 0.1rem, #acf 0.85rem, #acf 1.15rem, rgba(187, 221, 255, 0) 1.9rem, rgba(187, 221, 255, 0) 2rem);*/
 }
 
 h1, h2, h3 {
