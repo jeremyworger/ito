@@ -44,7 +44,7 @@ Node.js with the following features:
 
 * Browser or Node.js, compatible with ES2015(ES6)
   * If you need to run your web application on an ES5 environment,
-  please use `src-es5/ito*.js` files converted (transpiled) into ES5.
+  please use the ES5-transpiled files, `src-es5/ito*.js`.
 * WebRTC compatibility (when using WebRTC peer-to-peer communication)
 * A developer account for one of the following backend service(s):
   * [Firebase](https://firebase.google.com)
@@ -93,7 +93,7 @@ Note: *Node.js is required to initialize a Kii Cloud application.*
       --client-id <your_client_id> \
       --client-secret <your_client_secret>
     ```
-5. Deploy `etc/kii-server-code.js` as Server Code with `etc/kii-server-hook.json' as Server hook
+5. Deploy `etc/kii-server-code.js` as Server Code with `etc/kii-server-hook.json` as Server hook
     Configuration File, by using
     [Command Line Tools](http://docs.kii.com/en/guides/commandlinetools/). For example:
     ```bash
@@ -132,7 +132,7 @@ Note: You can modify paths of scripts according to your environment.
 On your shell (Terminal, etc.),
 
 ```bash
-$ npm install ito --save
+$ npm install ito-js --save
 ```
 
 In your web application,
