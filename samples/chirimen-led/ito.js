@@ -643,24 +643,26 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
           if (state !== 'uninitialized') resolve();else if (!(p instanceof ItoProvider)) reject(new Error('Incorrect Provider'));else {
             provider = p;
 
-            // load WebRTC adapter
-            var adapter = document.createElement('script');
-            adapter.src = 'https://webrtc.github.io/adapter/adapter-latest.js';
-            adapter.onload = function () {
-              p.load(url).then(function () {
-                return p.init(arg);
-              }).then(function (b) {
-                provider.onOnline(b);
-                resolve(p.getUser());
-              }, function (error) {
-                if (error === true) {
-                  provider.onOnline(false);
-                  reject('duplicated sign-in');
-                } else reject(error);
-              });
-            };
-            var h = document.querySelector('head');
-            h.insertBefore(adapter, h.firstChild);
+            // load WebRTC adapter (in the case of web browsers, for now)
+            if (isBrowser) {
+              var adapter = document.createElement('script');
+              adapter.src = 'https://webrtc.github.io/adapter/adapter-latest.js';
+              adapter.onload = function () {
+                p.load(url).then(function () {
+                  return p.init(arg);
+                }).then(function (b) {
+                  provider.onOnline(b);
+                  resolve(p.getUser());
+                }, function (error) {
+                  if (error === true) {
+                    provider.onOnline(false);
+                    reject('duplicated sign-in');
+                  } else reject(error);
+                });
+              };
+              var h = document.querySelector('head');
+              h.insertBefore(adapter, h.firstChild);
+            }
           }
         });
       }
