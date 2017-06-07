@@ -16,7 +16,6 @@
     self.localStorage = new LocalStorage('./localStorage');
   }
 
-
   /*
    * Simple fetch polyfill
    */
@@ -502,26 +501,28 @@
         else {
           provider = p;
 
-          // load WebRTC adapter
-          const adapter = document.createElement('script');
-          adapter.src = 'https://webrtc.github.io/adapter/adapter-latest.js';
-          adapter.onload = () => {
-            p.load(url).then(() => {
-              return p.init(arg);
-            }).then(b => {
-              provider.onOnline(b);
-              resolve(p.getUser());
-            }, error => {
-              if(error === true) {
-                provider.onOnline(false);
-                reject('duplicated sign-in');
-              }
-              else
-                reject(error);
-            });
-          };
-          const h = document.querySelector('head');
-          h.insertBefore(adapter, h.firstChild);
+          // load WebRTC adapter (in the case of web browsers, for now)
+          if (isBrowser) {
+            const adapter = document.createElement('script');
+            adapter.src = 'https://webrtc.github.io/adapter/adapter-latest.js';
+            adapter.onload = () => {
+              p.load(url).then(() => {
+                return p.init(arg);
+              }).then(b => {
+                provider.onOnline(b);
+                resolve(p.getUser());
+              }, error => {
+                if(error === true) {
+                  provider.onOnline(false);
+                  reject('duplicated sign-in');
+                }
+                else
+                  reject(error);
+              });
+            };
+            const h = document.querySelector('head');
+            h.insertBefore(adapter, h.firstChild);
+          }
         }
       });
     }
