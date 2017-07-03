@@ -96,7 +96,7 @@
     }
   });
 
-  const useTrack = !!self.RTCRtpSender;
+  const useTrack = 'ontrack' in RTCPeerConnection.prototype;
   const useTransceiver = !!self.RTCRtpTransceiver;
   let endpoints = {};
   let pcOpt = {
@@ -753,6 +753,12 @@
     let pc = new RTCPeerConnection(pcOpt);
     onEndpointStateChange(uid, cid, 'connecting');
     e.peerConnection = pc;
+    if (useTransceiver) {
+      e.transceivers = {
+        video: [],
+        audio: []
+      };
+    }
     pc.addEventListener('icecandidate', onIceCandidate.bind(pc, e));
     if (useTrack)
       pc.addEventListener('track', event => {
@@ -796,9 +802,28 @@
     }
     if (e.inputStream) {
       if (useTransceiver) {
-        e.inputStream.getTracks().forEach(track => {
-          // TODO: replace the following line into codes using addTransceiver()
-        });
+        const tracks = e.inputStream.getTracks();
+        if (tracks.length) {
+          tracks.forEach(t => {
+            const tr = pc.addTransceiver(t.kind);
+            const isVideo = t.kind === 'video';
+            const receiveTrack = isVideo ? opt.receiveVideoTrack : opt.receiveAudioTrack;
+            tr.sender.replaceTrack(t);
+            tr.receiver.track.enabled = receiveTrack;
+            tr.setDirection(receiveTrack ? 'sendrecv' : 'sendonly');
+            e.transceivers[isVideo ? 'video' : 'audio'].push(tr);
+          });
+        }
+        else {
+          const tv = pc.addTransceiver('video');
+          tv.receiver.track.enabled = opt.receiveVideoTrack;
+          tv.setDirection(opt.receiveVideoTrack ? 'recvonly' : 'inactive');
+          e.transceivers.video.push(tv);
+          const ta = pc.addTransceiver('audio');
+          ta.receiver.track.enabled = opt.receiveAudioTrack;
+          ta.setDirection(opt.receiveAudioTrack ? 'recvonly' : 'inactive');
+          e.transceivers.audio.push(ta);
+        }
       }
       else {
         if (useTrack) {
