@@ -46,6 +46,12 @@ the server location which you have chosen.
 Note: *The default value of SDK URL is `KiiSDK.min.js` in the same directory, since
 Kii Cloud SDK is not available via CDN.*
 
+## Common options
+
+The second argument of `ito.init` can include the following additional options:
+
+- `limitToFriends`: `false` if you want to allow browsers/devices to receive messages from non-friend peers
+
 # Account and Authentication
 
 ## Sign in

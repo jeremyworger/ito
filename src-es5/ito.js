@@ -79,6 +79,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
   var state = 'uninitialized';
   var profile = {};
   var friends = {};
+  var limitToFriends = true;
   Object.defineProperties(profile, {
     userName: {
       get: function get() {
@@ -110,7 +111,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     }
   });
 
-  var useTrack = !!self.RTCRtpSender;
+  var useTrack = 'ontrack' in RTCPeerConnection.prototype;
   var useTransceiver = !!self.RTCRtpTransceiver;
   var endpoints = {};
   var pcOpt = {
@@ -642,6 +643,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
         return new Promise(function (resolve, reject) {
           if (state !== 'uninitialized') resolve();else if (!(p instanceof ItoProvider)) reject(new Error('Incorrect Provider'));else {
             provider = p;
+            limitToFriends = !!arg.limitToFriends;
 
             // load WebRTC adapter (in the case of web browsers, for now)
             if (isBrowser) {
@@ -746,7 +748,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     }, {
       key: 'send',
       value: function send(uid, msg) {
-        if (!friends[uid]) return Promise.reject(new Error('not registered as a friend: ' + uid));else return provider.sendMessage(uid, msg);
+        if (!friends[uid] && limitToFriends) return Promise.reject(new Error('not registered as a friend: ' + uid));else return provider.sendMessage(uid, msg);
       }
 
       /*
@@ -888,6 +890,12 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     var pc = new RTCPeerConnection(pcOpt);
     onEndpointStateChange(uid, cid, 'connecting');
     e.peerConnection = pc;
+    if (useTransceiver) {
+      e.transceivers = {
+        video: [],
+        audio: []
+      };
+    }
     pc.addEventListener('icecandidate', onIceCandidate.bind(pc, e));
     if (useTrack) pc.addEventListener('track', function (event) {
       updateStream(e, event.streams[0]);
@@ -924,9 +932,27 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     }
     if (e.inputStream) {
       if (useTransceiver) {
-        e.inputStream.getTracks().forEach(function (track) {
-          // TODO: replace the following line into codes using addTransceiver()
-        });
+        var tracks = e.inputStream.getTracks();
+        if (tracks.length) {
+          tracks.forEach(function (t) {
+            var tr = pc.addTransceiver(t.kind);
+            var isVideo = t.kind === 'video';
+            var receiveTrack = isVideo ? opt.receiveVideoTrack : opt.receiveAudioTrack;
+            tr.sender.replaceTrack(t);
+            tr.receiver.track.enabled = receiveTrack;
+            tr.setDirection(receiveTrack ? 'sendrecv' : 'sendonly');
+            e.transceivers[isVideo ? 'video' : 'audio'].push(tr);
+          });
+        } else {
+          var tv = pc.addTransceiver('video');
+          tv.receiver.track.enabled = opt.receiveVideoTrack;
+          tv.setDirection(opt.receiveVideoTrack ? 'recvonly' : 'inactive');
+          e.transceivers.video.push(tv);
+          var ta = pc.addTransceiver('audio');
+          ta.receiver.track.enabled = opt.receiveAudioTrack;
+          ta.setDirection(opt.receiveAudioTrack ? 'recvonly' : 'inactive');
+          e.transceivers.audio.push(ta);
+        }
       } else {
         if (useTrack) {
           e.inputStream.getTracks().forEach(function (track) {

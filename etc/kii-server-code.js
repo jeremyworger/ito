@@ -1,3 +1,5 @@
+20 Jul 11:55:19 - Downloading code version 9ephawbs80p897d75p4qdt1gb...
+20 Jul 11:55:19 - Downloaded content: 
 /**
  * ito.js
  * 
@@ -166,7 +168,6 @@ function restrictItoMessage(params, context, done) {
               return object.delete().then(function() { return true; });
           });
         }
-        break;
       case 'email':
         if(object.getID() !== KII_OBJ_EMAIL + user.getID())
           return object.delete();
@@ -176,7 +177,6 @@ function restrictItoMessage(params, context, done) {
         break;
       case 'administrators':
         return object.delete();
-        break;
       }
     });
   }).then(function() {
@@ -429,7 +429,10 @@ function onOffline(params, context, done) {
       var g = KiiGroup.groupWithID(obj.get('group'));
       b = g.bucketWithName(KII_BUCKET_PROFILE);
       o = b.createObjectWithID(KII_OBJ_PROFILE + user.getID());
-      return o.refresh();
+      b = g.bucketWithName(KII_BUCKET_FRIENDS);
+      return kiiSetACLEntry(b, subject.authenticated, action.bucket.create, false).then(function() {
+        return o.refresh();
+      });
     }).then(function(obj) {
       return kiiSetOffline(obj);
     }).then(function() {
