@@ -35,6 +35,8 @@
   let isAdmin = false;
   let passcodesRef = null;
   let passcode = null;
+  let limitToFriendsRef = null;
+  let limitToFriends = true;
 
   let messagesRef = null;
 
@@ -126,7 +128,7 @@
           let h = document.querySelector('head');
           return new Promise((resolve, reject) => {
             let s = document.createElement('script');
-            s.src = url || 'https://www.gstatic.com/firebasejs/3.8.0/firebase.js';
+            s.src = url || 'https://www.gstatic.com/firebasejs/4.1.3/firebase.js';
             s.addEventListener('load', () => { resolve(); });
             s.addEventListener('error', () => {
               reject(new Error('cannot load Firebase SDK'));
@@ -146,6 +148,7 @@
 
     init(arg) {
       return new Promise((resolve, reject) => {
+        limitToFriends = !!arg.limitToFriends;
         initResolve = resolve;
         firebase.initializeApp({
           apiKey: arg.apiKey,
@@ -879,6 +882,10 @@
     disconnectRef = firebase.database().ref('users/' + user.uid + '/status');
     disconnectRef.onDisconnect().remove();
     disconnectRef.onDisconnect().set('offline');
+    limitToFriendsRef = firebase.database().ref('users/' + user.uid + '/limitToFriends');
+    limitToFriendsRef.set(limitToFriends);
+    limitToFriendsRef.onDisconnect().remove();
+    limitToFriendsRef.onDisconnect().set(true);
   }
 
   function firebaseResetOnDisconnectRef() {

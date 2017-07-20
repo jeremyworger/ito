@@ -72,6 +72,7 @@
   let passcodeRef = null;
   let emailRef = null;
   let friendsRef = {};
+  let limitToFriends;
   let ping = null;
   let pendingRequests = [];
 
@@ -203,6 +204,7 @@
 
     init(arg) {
       return new Promise((resolve, reject) => {
+        limitToFriends = !!arg.limitToFriends;
         development = !!arg && !!arg.development;
         appId = arg && arg.appId;
         loginOpt = arg && typeof arg.login === 'object' ? arg.login : {};
@@ -722,17 +724,22 @@
   }
 
   function kiiPutMessageObject(uid, data) {
-    let bucket = friendsRef[uid].friendsBucket;
-    if(!bucket)
-      return Promise.reject(new Error('no such friend: ' + uid));
-    let user = getUser();
-    let msg = bucket.createObject();
-    Object.keys(data).forEach(k => {
-      msg.set(k, data[k]);
-    });
-    msg.set('uid', user.getID());
-    return kiiPushQueue(kiiPutObjectWithACL, msg).then(() => {
-      return msg;
+    const ref = friendsRef[uid];
+    return (ref ? Promise.resolve(ref.friendsBucket) :
+      (!limitToFriends ? KiiUser.userWithID(uid).ownerOfGroups().then(params => {
+        let g = params[1].filter(i => { return i.getName() === KII_GROUP_FRIENDS; })[0];
+        return g ? g.bucketWithName(KII_BUCKET_FRIENDS) : Promise.reject(new Error('no such friend: ' + uid));
+      }) : Promise.reject(new Error('no such friend: ' + uid)))
+    ).then(bucket => {
+      let user = getUser();
+      let msg = bucket.createObject();
+      Object.keys(data).forEach(k => {
+        msg.set(k, data[k]);
+      });
+      msg.set('uid', user.getID());
+      return kiiPushQueue(kiiPutObjectWithACL, msg).then(() => {
+        return msg;
+      }, () => { throw new Error('no such a friend or refused your message: ' + uid) });
     });
   }
 
@@ -752,6 +759,13 @@
       .then(() => {
         return kiiSetACLEntry(profileBucket, friendsGroup, KII_ACTION.BUCKET.READ,  true);
       });
+    });
+  }
+
+  function kiiSetFriendsBucketACL() {
+    return kiiSetACLEntry(friendsBucket, new KiiAnyAuthenticatedUser(), KII_ACTION.BUCKET.CREATE, false).then(() => {
+      if (!limitToFriends)
+        return kiiSetACLEntry(friendsBucket, new KiiAnyAuthenticatedUser(), KII_ACTION.BUCKET.CREATE, true);
     });
   }
 
@@ -1003,8 +1017,8 @@
     });
   }
 
-  function kiiSetAppScopeObjectACL(object) {
-    return kiiSetACLEntry(  object, KII_SUB.AUTHENTICATED, KII_ACTION.OBJECT.READ,  false)
+  function kiiSetAppScopeObjectACL(object, grant) {
+    return kiiSetACLEntry(  object, KII_SUB.AUTHENTICATED, KII_ACTION.OBJECT.READ,  grant)
     .then(() => {
       return kiiSetACLEntry(object, KII_SUB.ANONYMOUS,     KII_ACTION.OBJECT.READ,  false);
     }).then(() => {
@@ -1059,7 +1073,7 @@
     emailRef.set('status', 'online');
     emailRef.set(KII_PROP_DATAOBSERVER, []);
     return emailRef.saveAllFields().then(() => {
-      return !created ? kiiSetAppScopeObjectACL(emailRef, true) : Promise.resolve();
+      return !created ? kiiSetAppScopeObjectACL(emailRef, !limitToFriends) : Promise.resolve();
     });
   }
 
@@ -1188,6 +1202,8 @@
         throw ERR_DUPLICATE_LOGIN;
       }) : kiiInitMqttClient().then(() => {
         return kiiSubscribePush(friendsBucket);
+      }).then(() => {
+        return kiiSetFriendsBucketACL();
       }).then(() => {
         return kiiSubscribePush(notificationBucket);
       }).then(() => {

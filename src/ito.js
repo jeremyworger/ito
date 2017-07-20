@@ -65,6 +65,7 @@
   let state = 'uninitialized';
   let profile = {};
   let friends = {};
+  let limitToFriends = true;
   Object.defineProperties(profile, {
     userName: {
       get: () => {
@@ -500,6 +501,7 @@
           reject(new Error('Incorrect Provider'));
         else {
           provider = p;
+          limitToFriends = !!arg.limitToFriends;
 
           // load WebRTC adapter (in the case of web browsers, for now)
           if (isBrowser) {
@@ -601,7 +603,7 @@
      * Client: Messages
      */
     send(uid, msg) {
-      if (!friends[uid])
+      if (!friends[uid] && limitToFriends)
         return Promise.reject(new Error('not registered as a friend: ' + uid));
       else
         return provider.sendMessage(uid, msg);
