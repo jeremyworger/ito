@@ -138,7 +138,7 @@ $ npm install ito-js --save
 In your web application,
 
 ```js
-let ito = require('ito');
+let ito = require('ito-js');
 ```
 
 For detailed description of API, please refer to [the API documentation](API.md).
