@@ -628,7 +628,7 @@
       return new Promise((resolve, reject) => {
         if (!MediaStream || !RTCPeerConnection)
           reject(new Error('WebRTC is not available on this browser'))
-        else if (!friends[uid])
+        else if (!friends[uid] && limitToFriends)
           reject(new Error('not registered as a friend: ' + uid));
         // else if(friends[uid].status !== 'online')
         //   reject(new Error('not online: ' + uid));
