@@ -1,0 +1,357 @@
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  font-weight: 300;
+}
+
+strong, b {
+  font-weight: 600;
+}
+
+code, var, tt, pre {
+  font-family: 'Courier New', monospace;
+  font-weight: 400;
+  font-size: 16px;
+}
+
+body {
+  margin-top: 2.4rem;
+  font-size: 16px;
+  background-color: #fff;
+  color: #004;
+  -webkit-text-size-adjust: none;
+}
+
+code {
+  color: #028;
+}
+
+var {
+  color: #04c;
+  font-weight: 600;
+  font-style: normal;
+}
+
+pre {
+  -webkit-overflow-scrolling: touch;
+}
+
+pre code {
+  border-radius: 0.2rem;
+}
+
+ul {
+  margin: 0.5rem 0;
+}
+
+li {
+  margin-bottom: 0.5rem;
+}
+
+nav {
+  position: fixed;
+  display: block;
+  width: auto;
+  margin: 0;
+  height: 2rem;
+  margin: 0;
+  padding: 0.2rem;
+  left: 0;
+  right: 0;
+  top: 0;
+  background-color: #004;
+  color: #fff;
+  line-height: 2rem;
+  text-align: center;
+}
+
+nav > ul {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+nav > ul > li {
+  position: relative;
+  display: inline-block;
+  height: 100%;
+  margin: 0 0.2rem;
+  padding: 0;
+}
+
+nav > ul > li > a {
+  display: block;
+  height: 100%;
+  margin: 0;
+  padding: 0 0.2rem;
+  border-radius: 0.2rem;
+  color: #fff;
+  font-weight: 400;
+  text-decoration: unset;
+  transition: background-color 0.1s ease;
+}
+
+nav > ul > li > a:active {
+  background-color: #04c;
+}
+
+nav > ul > li#top {
+  width: 4rem;
+  float: left;
+  text-align: left;
+}
+
+nav > ul > li#top > a {
+  font-size: 130%;
+  font-weight: 700;
+}
+
+nav > ul > li#repo {
+  width: 4rem;
+  float: right;
+}
+
+nav input, nav input + label {
+  display: none;
+}
+
+header, footer {
+  padding: 0;
+  background: #9df;
+  background-size: 2rem 2rem;
+  background-repeat: repeat;
+  background-image:
+    repeating-linear-gradient(45deg, rgba(153, 221, 255, 0), rgba(153, 221, 255, 0) 0.070710678118655rem, rgba(187, 238, 255, 0.5) 0.14142135623731rem, rgba(187, 238, 255, 0.5) 0.565685424949238rem, rgba(153, 221, 255, 0) 0.636396103067893rem, rgba(153, 221, 255, 0) 1.414213562373095rem),
+    repeating-linear-gradient(-45deg, rgba(153, 221, 255, 0), rgba(153, 221, 255, 0) 0.070710678118655rem, #bdf 0.14142135623731rem, #bdf 0.565685424949238rem, rgba(153, 221, 255, 0) 0.636396103067893rem, rgba(153, 221, 255, 0) 1.414213562373095rem),
+    repeating-linear-gradient(45deg, rgba(153, 221, 255, 0), rgba(153, 221, 255, 0) 0.777817459305202rem, #bef 0.848528137423857rem, #bef 1.272792206135786rem, rgba(153, 221, 255, 0) 1.34350288425444rem, rgba(153, 221, 255, 0) 1.414213562373095rem),
+    repeating-linear-gradient(-45deg, rgba(153, 221, 255, 0), rgba(153, 221, 255, 0) 0.777817459305202rem, #bdf 0.848528137423857rem, #bdf 1.272792206135786rem, rgba(153, 221, 255, 0) 1.34350288425444rem, rgba(153, 221, 255, 0) 1.414213562373095rem)
+}
+
+h1, h2, h3 {
+  display: block;
+  font-weight: 400;
+  color: #028;
+}
+
+h1, h2 {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0;
+}
+
+h1 {
+  font-size: 150%;
+  text-align: center;
+}
+
+h2 {
+  font-size: 140%;
+}
+
+h3 {
+  font-size: 120%;
+  margin: 0.2rem 0;
+  padding: 0.2rem 0;
+}
+
+header {
+  text-align: center;
+}
+
+h1#figure {
+  padding: 10.4rem 0.2rem 0.2rem 0.2rem;
+  background-image: url(../images/figure.svg);
+  background-size: auto 10rem;
+  background-position: 50% 0.2rem;
+  background-repeat: no-repeat;
+}
+
+a#getstarted {
+  display: inline-block;
+  background: #fff;
+  margin: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 2px solid #2af;
+  font-size: 120%;
+  font-weight: 400;
+  text-decoration: none;
+  color: #2af;
+  transition: background-color 0.1s ease;
+}
+
+a#getstarted:active {
+  background: #4cf;
+}
+
+section {
+  padding: 0.5rem;
+}
+
+section > * {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0.5rem 0;
+}
+
+section:not(:last-of-type),
+section section:not(:last-of-type) {
+  margin-bottom: 0.5rem;
+}
+
+section:nth-child(2n) {
+  background: #f0fcff;
+}
+
+section > section,
+section:nth-child(2n) > section {
+  background: #cef;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.5rem;
+}
+
+section > ul {
+  list-style: none;
+  column-count: 2;
+}
+
+section > ul > li {
+  margin-bottom: 0.5rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.5rem;
+  background: #f0fcff;
+  break-inside: avoid;
+}
+
+section:nth-child(2n) > ul > li {
+  background: #fff;
+}
+
+address {
+  padding: 0.2rem;
+  text-align: center;
+}
+
+details {
+  background: #adf;
+  margin: 0;
+  padding: 0;
+  border-radius: 0.5rem;
+  background: #004;
+  color: #fff;
+  font-weight: 400;
+}
+
+details > * {
+  margin: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+details > summary {
+  margin: 0;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.5rem;
+  background: #028;
+  color: #fff;
+}
+
+details[open] > summary {
+  border-radius: 0.5rem 0.5rem 0 0;
+}
+
+@media screen and ( max-width: 480px ) {
+  nav {
+    z-index: 1;
+  }
+
+  nav > ul {
+    position: absolute;
+    width: 100%;
+    height: auto;
+    left: 0;
+    top: 2.4rem;
+  }
+
+  nav > input + label + ul > li:not(#top) {
+    background: #016;
+    transition: transform 0.2s ease;
+    transform: translateX(-110%);
+  }
+
+  nav > input + label + ul > li:last-child {
+    box-shadow: 0 0.5rem 0.5rem rgba(0, 0, 64, 0.8);
+  }
+
+  nav > input:checked + label + ul > li:not(#top) {
+    transform: translateX(0%);
+  }
+
+  nav > ul > li#top {
+    position: absolute;
+    width: 4rem;
+    height: 2rem;
+    left: 0;
+    top: -2.4rem;
+    padding: 0.2rem;
+    float: left;
+    text-align: left;
+  }
+
+  nav > ul > li:not(#top), nav > ul > li#repo {
+    width: 100%;
+    margin: 0;
+  }
+
+  nav > ul > li > a {
+    border-radius: 0;
+  }
+
+  nav > ul > li#top > a {
+    border-radius: 0.2rem;
+  }
+
+  nav input + label {
+    position: absolute;
+    display: block;
+    right: 0;
+    top: 0;
+    width: 4rem;
+    height: 2rem;
+    margin: 0;
+    padding: 0.2rem;
+    background-image: url("../images/showmenu.svg");
+    background-size: contain;
+    background-position: 100% 50%;
+    background-repeat: no-repeat;
+    transition: transform 0.2s ease;
+    z-index: 3;
+    transform-origin: 50% 50%;
+  }
+
+  nav input:checked + label {
+    transform: rotateX(180deg);
+  }
+
+  h1 {
+    font-size: 120%;
+  }
+
+  h2 {
+    font-size: 115%;
+  }
+
+  h3 {
+    font-size: 108%;
+  }
+
+  section > ul {
+    list-style: none;
+    column-count: 1;
+  }
+}

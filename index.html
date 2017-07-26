@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ito - a JavaScript library for browser-to-browser communication</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.10.0/styles/qtcreator_dark.min.css" rel="stylesheet">
+    <link href="style/ito.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.10.0/highlight.min.js"></script>
+    <script>hljs.initHighlightingOnLoad();</script>
+  </head>
+  <body ontouchstart=""> <!-- a hack for *:active in iOS -->
+    <nav>
+      <input id="showmenu" type="checkbox"><label for="showmenu"></label>
+      <ul>
+        <li id="top"><a href="./">ito</a></li>
+        <li><a href="./howto.html">how-to</a></li>
+        <li><a href="./samples.html">samples</a></li>
+        <li id="repo"><a href="https://github.com/kddi-research-wot/ito/">GitHub</a></li>
+      </ul>
+    </nav>
+    <header>
+      <h1 id="figure"><strong>ito</strong> - a JavaScript library for browser-to-browser communication</h1>
+      <a id="getstarted" href="./howto.html">get started</a>
+    </header>
+    <section>
+      <h2>About <strong>ito</strong></h2>
+      <p>
+        <strong>ito</strong> is a JavaScript library for browser-to-browser communication,
+        intended to work on devices without an input human interface like keyboard or mouse,
+        of course as well as PCs, smartphones and tablets.
+      </p>
+      <p>
+        <strong>ito</strong> runs on JavaScript-enabled platforms, both HTML5 browsers and Node.js.
+        You can deploy <strong>ito</strong> for browser-enabled IoT devices like Raspberry Pi, <a href="https://chirimen.org/">CHIRIMEN</a>, etc.
+        which do not have input devices like keyboard or mouse, or are not connected to any display.
+      </p>
+      <p>Typical JavaScript codes to use <strong>ito</strong> looks like below:</p>
+      <pre><code class="javascript">ito.init({ /* initialization parameters */ });
+
+document.getElementById('submit').onclick = () => {
+  ito.send(peerId, document.getElementById('textarea').value);
+};
+
+ito.on('message', event => {
+  document.getElementById('div').textContent = event.data;
+});</code></pre>
+    </section>
+    <section>
+      <h2>Server-less setup</h2>
+      <p>Applicaiton server infrastructure, e.g. Node.js, Java Servlet, is not needed.</p>
+      <p>
+        Instead, only setting up <a href="https://firebase.google.com/">Firebase</a> or <a href="https://www.kii.com/">Kii Cloud</a>
+        and writing web apps is required. All features like device ID management, pairing, browser-to-browser messaging and data base sharing
+        are provided through the <strong>ito</strong> library and cloud services.
+      </p>
+    </section>
+    <section>
+      <h2>Pairing and messaging</h2>
+      <p>No need to type a long ID like UUID, to connect with a peer. Short passcode is enough.</p>
+      <p>
+        <strong>ito</strong> supports browser-to-browser pairing using a passcode.
+        You can use 6-8 letters passcode for pairing. Of course, you can even generate random temporary passcode and encode it as a QR code.
+        Also, such use of passcode can keep the actual ID invisible until establishing pairing, for the purpose of privacy protection.
+      </p>
+      <pre><code class="javascript">// at an IoT device waiting for pairing request
+ito.setPasscode(passcode).then(() => {
+  ito.on('request', event => {
+    event.accept();
+  });
+}, () => {
+  console.log('The specified passcode is already in use.')
+});
+
+ito.on('addfriend', event => {
+  console.log('Paired with the user: ID = ' + event.uid);
+});</code></pre>
+      <pre><code class="javascript">// at a web browser as a device controller
+ito.request(document.getElementById('passcode').value).catch(() => {
+  alert('No device for the specified passcode is found.');
+});
+
+ito.on('accept', event => {
+  alert('Paired with the device: ID = ' + event.profile.uid);
+});</code></pre>
+    </section>
+    <section>
+      <h2>Other features</h2>
+      <ul>
+        <li>Data Store Sharing</li>
+        <li>[Experimental] Simple WebRTC Client</li>
+      </ul>
+      <p>Further detail is available in <a href="https://github.com/kddi-research-wot/ito/blob/master/README.md">README.md on GitHub Repository</a>.</p>
+    </section>
+    <section>
+      <h2>How to use <strong>ito</strong></h2>
+      <p>Short installation guide is available in <a href="./howto.html">how-to page</a>.</p>
+      <p>For further information about API, please refer to <a href="https://github.com/kddi-research-wot/ito/blob/master/API.md">API.md on GitHub Repository</a>.</p>
+    </section>
+    <footer>
+      <address>Copyright © 2017 <a href="https://www.kddi-research.jp/english/">KDDI Research, Inc.</a></address>
+    </footer>
+  </body>
+</html>
