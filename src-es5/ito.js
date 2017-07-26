@@ -771,7 +771,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
         if (!(stream instanceof MediaStream) && stream !== null) return Promise.reject(new Error('the second argument is neigher an instance of MediaStream nor null.'));
         if (!(opt instanceof Object)) return Promise.reject(new Error('the third argument is not an appropriate option.'));
         return new Promise(function (resolve, reject) {
-          if (!MediaStream || !RTCPeerConnection) reject(new Error('WebRTC is not available on this browser'));else if (!friends[uid]) reject(new Error('not registered as a friend: ' + uid));
+          if (!MediaStream || !RTCPeerConnection) reject(new Error('WebRTC is not available on this browser'));else if (!friends[uid] && limitToFriends) reject(new Error('not registered as a friend: ' + uid));
           // else if(friends[uid].status !== 'online')
           //   reject(new Error('not online: ' + uid));
           else if (MediaStream && stream && !(stream instanceof MediaStream)) reject(new Error('the second parameter (\'stream\') is invalid)'));else {
