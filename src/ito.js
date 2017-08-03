@@ -1033,7 +1033,7 @@
       opt.receiveVideoTrack = !!arg.video;
     }
 
-    accept(stream, opt) {
+    accept(stream) {
       return new Promise((resolve, reject) => {
         if (this.isOfferer)
           reject(new Error('not answerer'));
@@ -1048,6 +1048,10 @@
             audio: !!stream && stream.getAudioTracks().length > 0,
             video: !!stream && stream.getVideoTracks().length > 0
           };
+          let opt = epOpt[uid][cid];
+          if (!(options.audio || options.video ||
+              opt.receiveAudioTrack || opt.receiveVideoTrack || opt.useDataChannel))
+            throw new Error('Neither audio/video stream nor data channel is specified on both offerer and answerer');
           this.inputStream = stream;
           provider.sendAccept(uid, cid, options).then((() => {
             resolve();
