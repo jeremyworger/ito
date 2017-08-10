@@ -621,6 +621,7 @@
      * Client: WebRTC Signaling
      */
     invite(uid, stream, opt) {
+      opt = opt || {};
       if(!(stream instanceof MediaStream) && stream !== null)
         return Promise.reject(new Error('the second argument is neigher an instance of MediaStream nor null.'));
       if(!(opt instanceof Object))
@@ -633,7 +634,7 @@
         // else if(friends[uid].status !== 'online')
         //   reject(new Error('not online: ' + uid));
         else if (MediaStream && stream && !(stream instanceof MediaStream))
-          reject(new Error('the second parameter (\'stream\') is invalid)'));
+          reject(new Error('the second parameter (\'stream\') is invalid'));
         else {
           let options = {
             audio: !!stream && stream.getAudioTracks().length > 0,
@@ -746,6 +747,47 @@
     }
   }
 
+  function initTracks(e, opt) {
+    const pc = e.peerConnection;
+    if (e.inputStream) {
+      if (useTransceiver) {
+        const tracks = e.inputStream.getTracks();
+        if (tracks.length) {
+          return Promise.all(tracks.map(t => {
+            const tr = pc.addTransceiver(t.kind);
+            const isVideo = t.kind === 'video';
+            const receiveTrack = isVideo ? opt.receiveVideoTrack : opt.receiveAudioTrack;
+            return tr.sender.replaceTrack(t).then(() => {
+              tr.receiver.track.enabled = receiveTrack;
+              tr.setDirection(receiveTrack ? 'sendrecv' : 'sendonly');
+              e.transceivers[isVideo ? 'video' : 'audio'].push(tr);
+            });
+          }));
+        }
+        else {
+          const tv = pc.addTransceiver('video');
+          tv.receiver.track.enabled = opt.receiveVideoTrack;
+          tv.setDirection(opt.receiveVideoTrack ? 'recvonly' : 'inactive');
+          e.transceivers.video.push(tv);
+          const ta = pc.addTransceiver('audio');
+          ta.receiver.track.enabled = opt.receiveAudioTrack;
+          ta.setDirection(opt.receiveAudioTrack ? 'recvonly' : 'inactive');
+          e.transceivers.audio.push(ta);
+        }
+      }
+      else {
+        if (useTrack) {
+          e.inputStream.getTracks().forEach(track => {
+            pc.addTrack(track, e.inputStream);
+          });
+        }
+        else
+          pc.addStream(e.inputStream);
+      }
+    }
+    return Promise.resolve();
+  }
+
   function createPeerConnection(e) {
     let uid = e.peer;
     let cid = e.connection;
@@ -802,43 +844,10 @@
           e.emit(new ItoEndpointEvent('datachannel'));
         });
     }
-    if (e.inputStream) {
-      if (useTransceiver) {
-        const tracks = e.inputStream.getTracks();
-        if (tracks.length) {
-          tracks.forEach(t => {
-            const tr = pc.addTransceiver(t.kind);
-            const isVideo = t.kind === 'video';
-            const receiveTrack = isVideo ? opt.receiveVideoTrack : opt.receiveAudioTrack;
-            tr.sender.replaceTrack(t);
-            tr.receiver.track.enabled = receiveTrack;
-            tr.setDirection(receiveTrack ? 'sendrecv' : 'sendonly');
-            e.transceivers[isVideo ? 'video' : 'audio'].push(tr);
-          });
-        }
-        else {
-          const tv = pc.addTransceiver('video');
-          tv.receiver.track.enabled = opt.receiveVideoTrack;
-          tv.setDirection(opt.receiveVideoTrack ? 'recvonly' : 'inactive');
-          e.transceivers.video.push(tv);
-          const ta = pc.addTransceiver('audio');
-          ta.receiver.track.enabled = opt.receiveAudioTrack;
-          ta.setDirection(opt.receiveAudioTrack ? 'recvonly' : 'inactive');
-          e.transceivers.audio.push(ta);
-        }
-      }
-      else {
-        if (useTrack) {
-          e.inputStream.getTracks().forEach(track => {
-            pc.addTrack(track, e.inputStream);
-          });
-        }
-        else
-          pc.addStream(e.inputStream);
-      }
-    }
-    if (e.isOfferer)
-      sendOffer(e);
+    initTracks(e, opt).then(() => {
+      if (e.isOfferer)
+        sendOffer(e);
+    });
   }
 
   function createSdpOptions(e) {
@@ -887,6 +896,7 @@
   }
 
   function onSdp(e, sdp) {
+    console.log(sdp.sdp);
     this.setLocalDescription(sdp).then(() => {
       provider.sendSignaling(e.peer, e.connection, 'sdp', sdp);
     });
@@ -975,7 +985,7 @@
         receiveVideoTrack: false,
         useDataChannel: !!data,
         buffer: []
-      }
+      };
     }
 
     setInputStream(stream) {
@@ -1103,7 +1113,7 @@
         provider.sendClose(this.peer, this.connection).then(() => {
           resolve();
           provider.onClose({ uid: this.peer, cid: this.connection });
-        })
+        });
       });
     }
   }
