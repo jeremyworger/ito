@@ -1,5 +1,5 @@
 /**
- * ito-firebase.js
+ * index.js
  * 
  * Copyright 2017 KDDI Research, Inc.
  * 

@@ -768,13 +768,14 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     }, {
       key: 'invite',
       value: function invite(uid, stream, opt) {
+        opt = opt || {};
         if (!(stream instanceof MediaStream) && stream !== null) return Promise.reject(new Error('the second argument is neigher an instance of MediaStream nor null.'));
         if (!(opt instanceof Object)) return Promise.reject(new Error('the third argument is not an appropriate option.'));
         return new Promise(function (resolve, reject) {
           if (!MediaStream || !RTCPeerConnection) reject(new Error('WebRTC is not available on this browser'));else if (!friends[uid] && limitToFriends) reject(new Error('not registered as a friend: ' + uid));
           // else if(friends[uid].status !== 'online')
           //   reject(new Error('not online: ' + uid));
-          else if (MediaStream && stream && !(stream instanceof MediaStream)) reject(new Error('the second parameter (\'stream\') is invalid)'));else {
+          else if (MediaStream && stream && !(stream instanceof MediaStream)) reject(new Error('the second parameter (\'stream\') is invalid'));else {
               var options = {
                 audio: !!stream && stream.getAudioTracks().length > 0,
                 video: !!stream && stream.getVideoTracks().length > 0,
@@ -882,6 +883,43 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     }
   }
 
+  function initTracks(e, opt) {
+    var pc = e.peerConnection;
+    if (e.inputStream) {
+      if (useTransceiver) {
+        var tracks = e.inputStream.getTracks();
+        if (tracks.length) {
+          return Promise.all(tracks.map(function (t) {
+            var tr = pc.addTransceiver(t.kind);
+            var isVideo = t.kind === 'video';
+            var receiveTrack = isVideo ? opt.receiveVideoTrack : opt.receiveAudioTrack;
+            return tr.sender.replaceTrack(t).then(function () {
+              tr.receiver.track.enabled = receiveTrack;
+              tr.setDirection(receiveTrack ? 'sendrecv' : 'sendonly');
+              e.transceivers[isVideo ? 'video' : 'audio'].push(tr);
+            });
+          }));
+        } else {
+          var tv = pc.addTransceiver('video');
+          tv.receiver.track.enabled = opt.receiveVideoTrack;
+          tv.setDirection(opt.receiveVideoTrack ? 'recvonly' : 'inactive');
+          e.transceivers.video.push(tv);
+          var ta = pc.addTransceiver('audio');
+          ta.receiver.track.enabled = opt.receiveAudioTrack;
+          ta.setDirection(opt.receiveAudioTrack ? 'recvonly' : 'inactive');
+          e.transceivers.audio.push(ta);
+        }
+      } else {
+        if (useTrack) {
+          e.inputStream.getTracks().forEach(function (track) {
+            pc.addTrack(track, e.inputStream);
+          });
+        } else pc.addStream(e.inputStream);
+      }
+    }
+    return Promise.resolve();
+  }
+
   function createPeerConnection(e) {
     var uid = e.peer;
     var cid = e.connection;
@@ -930,38 +968,9 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
         e.emit(new ItoEndpointEvent('datachannel'));
       });
     }
-    if (e.inputStream) {
-      if (useTransceiver) {
-        var tracks = e.inputStream.getTracks();
-        if (tracks.length) {
-          tracks.forEach(function (t) {
-            var tr = pc.addTransceiver(t.kind);
-            var isVideo = t.kind === 'video';
-            var receiveTrack = isVideo ? opt.receiveVideoTrack : opt.receiveAudioTrack;
-            tr.sender.replaceTrack(t);
-            tr.receiver.track.enabled = receiveTrack;
-            tr.setDirection(receiveTrack ? 'sendrecv' : 'sendonly');
-            e.transceivers[isVideo ? 'video' : 'audio'].push(tr);
-          });
-        } else {
-          var tv = pc.addTransceiver('video');
-          tv.receiver.track.enabled = opt.receiveVideoTrack;
-          tv.setDirection(opt.receiveVideoTrack ? 'recvonly' : 'inactive');
-          e.transceivers.video.push(tv);
-          var ta = pc.addTransceiver('audio');
-          ta.receiver.track.enabled = opt.receiveAudioTrack;
-          ta.setDirection(opt.receiveAudioTrack ? 'recvonly' : 'inactive');
-          e.transceivers.audio.push(ta);
-        }
-      } else {
-        if (useTrack) {
-          e.inputStream.getTracks().forEach(function (track) {
-            pc.addTrack(track, e.inputStream);
-          });
-        } else pc.addStream(e.inputStream);
-      }
-    }
-    if (e.isOfferer) sendOffer(e);
+    initTracks(e, opt).then(function () {
+      if (e.isOfferer) sendOffer(e);
+    });
   }
 
   function createSdpOptions(e) {
@@ -1009,6 +1018,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
   }
 
   function onSdp(e, sdp) {
+    console.log(sdp.sdp);
     this.setLocalDescription(sdp).then(function () {
       provider.sendSignaling(e.peer, e.connection, 'sdp', sdp);
     });
@@ -1202,7 +1212,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
       }
     }, {
       key: 'accept',
-      value: function accept(stream, opt) {
+      value: function accept(stream) {
         var _this20 = this;
 
         return new Promise(function (resolve, reject) {
@@ -1213,6 +1223,8 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
               audio: !!stream && stream.getAudioTracks().length > 0,
               video: !!stream && stream.getVideoTracks().length > 0
             };
+            var opt = epOpt[uid][cid];
+            if (!(options.audio || options.video || opt.receiveAudioTrack || opt.receiveVideoTrack || opt.useDataChannel)) throw new Error('Neither audio/video stream nor data channel is specified on both offerer and answerer');
             _this20.inputStream = stream;
             provider.sendAccept(uid, cid, options).then(function () {
               resolve();
