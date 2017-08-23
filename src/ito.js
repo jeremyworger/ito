@@ -896,7 +896,6 @@
   }
 
   function onSdp(e, sdp) {
-    console.log(sdp.sdp);
     this.setLocalDescription(sdp).then(() => {
       provider.sendSignaling(e.peer, e.connection, 'sdp', sdp);
     });
