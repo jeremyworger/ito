@@ -82,6 +82,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
   var passcodeRef = null;
   var emailRef = null;
   var friendsRef = {};
+  var limitToFriends = void 0;
   var ping = null;
   var pendingRequests = [];
 
@@ -225,6 +226,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
       key: 'init',
       value: function init(arg) {
         return new Promise(function (resolve, reject) {
+          limitToFriends = !!arg.limitToFriends;
           development = !!arg && !!arg.development;
           appId = arg && arg.appId;
           loginOpt = arg && _typeof(arg.login) === 'object' ? arg.login : {};
@@ -762,16 +764,24 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
   }
 
   function kiiPutMessageObject(uid, data) {
-    var bucket = friendsRef[uid].friendsBucket;
-    if (!bucket) return Promise.reject(new Error('no such friend: ' + uid));
-    var user = _getUser();
-    var msg = bucket.createObject();
-    Object.keys(data).forEach(function (k) {
-      msg.set(k, data[k]);
-    });
-    msg.set('uid', user.getID());
-    return kiiPushQueue(kiiPutObjectWithACL, msg).then(function () {
-      return msg;
+    var ref = friendsRef[uid];
+    return (ref ? Promise.resolve(ref.friendsBucket) : !limitToFriends ? KiiUser.userWithID(uid).ownerOfGroups().then(function (params) {
+      var g = params[1].filter(function (i) {
+        return i.getName() === KII_GROUP_FRIENDS;
+      })[0];
+      return g ? g.bucketWithName(KII_BUCKET_FRIENDS) : Promise.reject(new Error('no such friend: ' + uid));
+    }) : Promise.reject(new Error('no such friend: ' + uid))).then(function (bucket) {
+      var user = _getUser();
+      var msg = bucket.createObject();
+      Object.keys(data).forEach(function (k) {
+        msg.set(k, data[k]);
+      });
+      msg.set('uid', user.getID());
+      return kiiPushQueue(kiiPutObjectWithACL, msg).then(function () {
+        return msg;
+      }, function () {
+        throw new Error('no such a friend or refused your message: ' + uid);
+      });
     });
   }
 
@@ -790,6 +800,12 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
       return kiiSetACLEntry(profileRef, friendsGroup, KII_ACTION.OBJECT.WRITE, false).then(function () {
         return kiiSetACLEntry(profileBucket, friendsGroup, KII_ACTION.BUCKET.READ, true);
       });
+    });
+  }
+
+  function kiiSetFriendsBucketACL() {
+    return kiiSetACLEntry(friendsBucket, new KiiAnyAuthenticatedUser(), KII_ACTION.BUCKET.CREATE, false).then(function () {
+      if (!limitToFriends) return kiiSetACLEntry(friendsBucket, new KiiAnyAuthenticatedUser(), KII_ACTION.BUCKET.CREATE, true);
     });
   }
 
@@ -1035,8 +1051,8 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
     });
   }
 
-  function kiiSetAppScopeObjectACL(object) {
-    return kiiSetACLEntry(object, KII_SUB.AUTHENTICATED, KII_ACTION.OBJECT.READ, false).then(function () {
+  function kiiSetAppScopeObjectACL(object, grant) {
+    return kiiSetACLEntry(object, KII_SUB.AUTHENTICATED, KII_ACTION.OBJECT.READ, grant).then(function () {
       return kiiSetACLEntry(object, KII_SUB.ANONYMOUS, KII_ACTION.OBJECT.READ, false);
     }).then(function () {
       return kiiSetACLEntry(object, KII_SUB.AUTHENTICATED, KII_ACTION.OBJECT.WRITE, false);
@@ -1083,7 +1099,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
     emailRef.set('status', 'online');
     emailRef.set(KII_PROP_DATAOBSERVER, []);
     return emailRef.saveAllFields().then(function () {
-      return !created ? kiiSetAppScopeObjectACL(emailRef, true) : Promise.resolve();
+      return !created ? kiiSetAppScopeObjectACL(emailRef, !limitToFriends) : Promise.resolve();
     });
   }
 
@@ -1202,6 +1218,8 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         throw ERR_DUPLICATE_LOGIN;
       }) : kiiInitMqttClient().then(function () {
         return kiiSubscribePush(friendsBucket);
+      }).then(function () {
+        return kiiSetFriendsBucketACL();
       }).then(function () {
         return kiiSubscribePush(notificationBucket);
       }).then(function () {

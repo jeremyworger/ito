@@ -45,6 +45,8 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
   var isAdmin = false;
   var passcodesRef = null;
   var passcode = null;
+  var limitToFriendsRef = null;
+  var limitToFriends = true;
 
   var messagesRef = null;
 
@@ -142,7 +144,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
             var h = document.querySelector('head');
             return new Promise(function (resolve, reject) {
               var s = document.createElement('script');
-              s.src = url || 'https://www.gstatic.com/firebasejs/3.8.0/firebase.js';
+              s.src = url || 'https://www.gstatic.com/firebasejs/4.1.3/firebase.js';
               s.addEventListener('load', function () {
                 resolve();
               });
@@ -165,6 +167,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         var _this2 = this;
 
         return new Promise(function (resolve, reject) {
+          limitToFriends = !!arg.limitToFriends;
           initResolve = resolve;
           firebase.initializeApp({
             apiKey: arg.apiKey,
@@ -898,6 +901,10 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
     disconnectRef = firebase.database().ref('users/' + user.uid + '/status');
     disconnectRef.onDisconnect().remove();
     disconnectRef.onDisconnect().set('offline');
+    limitToFriendsRef = firebase.database().ref('users/' + user.uid + '/limitToFriends');
+    limitToFriendsRef.set(limitToFriends);
+    limitToFriendsRef.onDisconnect().remove();
+    limitToFriendsRef.onDisconnect().set(true);
   }
 
   function firebaseResetOnDisconnectRef() {
