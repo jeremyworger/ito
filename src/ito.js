@@ -749,41 +749,39 @@
 
   function initTracks(e, opt) {
     const pc = e.peerConnection;
-    if (e.inputStream) {
-      if (useTransceiver) {
-        const tracks = e.inputStream.getTracks();
-        if (tracks.length) {
-          return Promise.all(tracks.map(t => {
-            const tr = pc.addTransceiver(t.kind);
-            const isVideo = t.kind === 'video';
-            const receiveTrack = isVideo ? opt.receiveVideoTrack : opt.receiveAudioTrack;
-            return tr.sender.replaceTrack(t).then(() => {
-              tr.receiver.track.enabled = receiveTrack;
-              tr.setDirection(receiveTrack ? 'sendrecv' : 'sendonly');
-              e.transceivers[isVideo ? 'video' : 'audio'].push(tr);
-            });
-          }));
-        }
-        else {
-          const tv = pc.addTransceiver('video');
-          tv.receiver.track.enabled = opt.receiveVideoTrack;
-          tv.setDirection(opt.receiveVideoTrack ? 'recvonly' : 'inactive');
-          e.transceivers.video.push(tv);
-          const ta = pc.addTransceiver('audio');
-          ta.receiver.track.enabled = opt.receiveAudioTrack;
-          ta.setDirection(opt.receiveAudioTrack ? 'recvonly' : 'inactive');
-          e.transceivers.audio.push(ta);
-        }
+    if (useTransceiver) {
+      const tracks = e.inputStream ? e.inputStream.getTracks() : [];
+      if (tracks.length) {
+        return Promise.all(tracks.map(t => {
+          const tr = pc.addTransceiver(t.kind);
+          const isVideo = t.kind === 'video';
+          const receiveTrack = isVideo ? opt.receiveVideoTrack : opt.receiveAudioTrack;
+          return tr.sender.replaceTrack(t).then(() => {
+            tr.receiver.track.enabled = receiveTrack;
+            tr.setDirection(receiveTrack ? 'sendrecv' : 'sendonly');
+            e.transceivers[isVideo ? 'video' : 'audio'].push(tr);
+          });
+        }));
       }
       else {
-        if (useTrack) {
-          e.inputStream.getTracks().forEach(track => {
-            pc.addTrack(track, e.inputStream);
-          });
-        }
-        else
-          pc.addStream(e.inputStream);
+        const tv = pc.addTransceiver('video');
+        tv.receiver.track.enabled = opt.receiveVideoTrack;
+        tv.setDirection(opt.receiveVideoTrack ? 'recvonly' : 'inactive');
+        e.transceivers.video.push(tv);
+        const ta = pc.addTransceiver('audio');
+        ta.receiver.track.enabled = opt.receiveAudioTrack;
+        ta.setDirection(opt.receiveAudioTrack ? 'recvonly' : 'inactive');
+        e.transceivers.audio.push(ta);
       }
+    }
+    else if (e.inputStream) {
+      if (useTrack) {
+        e.inputStream.getTracks().forEach(track => {
+          pc.addTrack(track, e.inputStream);
+        });
+      }
+      else
+        pc.addStream(e.inputStream);
     }
     return Promise.resolve();
   }

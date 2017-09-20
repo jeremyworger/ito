@@ -3,7 +3,7 @@ let parent = null, endpoint = null, stream = null;
 // get a media stream from the local camera
 const getMediaStream = () => {
   return !stream ?
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(s => {
+    navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(s => {
       stream = s;
       document.getElementById('video').srcObject = s;
     }) : Promise.resolve();
@@ -17,6 +17,7 @@ ito.on('invite', event => {
   })
   getMediaStream().then(() => {
     endpoint.accept(stream);
+    document.getElementById('qrcode').classList.add('hidden');
   });
 });
 

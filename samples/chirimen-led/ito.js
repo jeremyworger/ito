@@ -885,37 +885,35 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
 
   function initTracks(e, opt) {
     var pc = e.peerConnection;
-    if (e.inputStream) {
-      if (useTransceiver) {
-        var tracks = e.inputStream.getTracks();
-        if (tracks.length) {
-          return Promise.all(tracks.map(function (t) {
-            var tr = pc.addTransceiver(t.kind);
-            var isVideo = t.kind === 'video';
-            var receiveTrack = isVideo ? opt.receiveVideoTrack : opt.receiveAudioTrack;
-            return tr.sender.replaceTrack(t).then(function () {
-              tr.receiver.track.enabled = receiveTrack;
-              tr.setDirection(receiveTrack ? 'sendrecv' : 'sendonly');
-              e.transceivers[isVideo ? 'video' : 'audio'].push(tr);
-            });
-          }));
-        } else {
-          var tv = pc.addTransceiver('video');
-          tv.receiver.track.enabled = opt.receiveVideoTrack;
-          tv.setDirection(opt.receiveVideoTrack ? 'recvonly' : 'inactive');
-          e.transceivers.video.push(tv);
-          var ta = pc.addTransceiver('audio');
-          ta.receiver.track.enabled = opt.receiveAudioTrack;
-          ta.setDirection(opt.receiveAudioTrack ? 'recvonly' : 'inactive');
-          e.transceivers.audio.push(ta);
-        }
-      } else {
-        if (useTrack) {
-          e.inputStream.getTracks().forEach(function (track) {
-            pc.addTrack(track, e.inputStream);
+    if (useTransceiver) {
+      var tracks = e.inputStream ? e.inputStream.getTracks() : [];
+      if (tracks.length) {
+        return Promise.all(tracks.map(function (t) {
+          var tr = pc.addTransceiver(t.kind);
+          var isVideo = t.kind === 'video';
+          var receiveTrack = isVideo ? opt.receiveVideoTrack : opt.receiveAudioTrack;
+          return tr.sender.replaceTrack(t).then(function () {
+            tr.receiver.track.enabled = receiveTrack;
+            tr.setDirection(receiveTrack ? 'sendrecv' : 'sendonly');
+            e.transceivers[isVideo ? 'video' : 'audio'].push(tr);
           });
-        } else pc.addStream(e.inputStream);
+        }));
+      } else {
+        var tv = pc.addTransceiver('video');
+        tv.receiver.track.enabled = opt.receiveVideoTrack;
+        tv.setDirection(opt.receiveVideoTrack ? 'recvonly' : 'inactive');
+        e.transceivers.video.push(tv);
+        var ta = pc.addTransceiver('audio');
+        ta.receiver.track.enabled = opt.receiveAudioTrack;
+        ta.setDirection(opt.receiveAudioTrack ? 'recvonly' : 'inactive');
+        e.transceivers.audio.push(ta);
       }
+    } else if (e.inputStream) {
+      if (useTrack) {
+        e.inputStream.getTracks().forEach(function (track) {
+          pc.addTrack(track, e.inputStream);
+        });
+      } else pc.addStream(e.inputStream);
     }
     return Promise.resolve();
   }
