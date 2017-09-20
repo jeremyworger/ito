@@ -1018,7 +1018,6 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
   }
 
   function onSdp(e, sdp) {
-    console.log(sdp.sdp);
     this.setLocalDescription(sdp).then(function () {
       provider.sendSignaling(e.peer, e.connection, 'sdp', sdp);
     });
