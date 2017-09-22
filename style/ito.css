@@ -43,6 +43,11 @@ pre code {
   border-radius: 0.2rem;
 }
 
+video {
+  width: 100%;
+  height: auto;
+}
+
 ul {
   margin: 0.5rem 0;
 }
