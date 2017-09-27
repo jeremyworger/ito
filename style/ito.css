@@ -43,7 +43,7 @@ pre code {
   border-radius: 0.2rem;
 }
 
-video {
+video, img.figure {
   width: 100%;
   height: auto;
 }
